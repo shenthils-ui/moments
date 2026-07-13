@@ -1,0 +1,42 @@
+export type TakenAtSource = 'exif' | 'file' | 'manual';
+export type PhotoStatus = 'active' | 'trashed';
+
+export interface Child {
+  id: string;
+  name: string;
+  birthDate: string | null; // ISO date (YYYY-MM-DD); null only after a rebuild-from-folders
+  color: string;
+  createdAt: string;
+}
+
+export interface Photo {
+  id: string;
+  contentHash: string;
+  childIds: string[];
+  takenAt: string; // ISO datetime
+  takenAtSource: TakenAtSource;
+  relPath: string; // path relative to PHOTOS_ROOT, forward slashes
+  filename: string;
+  mimeType: string;
+  width: number;
+  height: number;
+  sizeBytes: number;
+  caption: string;
+  tags: string[];
+  milestone: string | null;
+  status: PhotoStatus;
+  trashedAt: string | null;
+  createdAt: string;
+}
+
+export interface MetadataSnapshot {
+  app: string;
+  formatVersion: number;
+  exportedAt: string;
+  children: Child[];
+  photos: Photo[];
+  settings: Record<string, string>;
+}
+
+export const METADATA_FORMAT_VERSION = 1;
+export const TRASH_RETENTION_DAYS = 30;
