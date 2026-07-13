@@ -4,14 +4,6 @@ import sharp from 'sharp';
 
 const ALLOWED_SIZES = [256, 1024];
 
-let sharpSupportsHeif: boolean | null = null;
-
-async function checkSharpHeif(): Promise<boolean> {
-  if (sharpSupportsHeif !== null) return sharpSupportsHeif;
-  sharpSupportsHeif = Boolean((sharp.format as any)?.heif?.input?.file);
-  return sharpSupportsHeif;
-}
-
 /** Decode HEIC via the libheif WASM decoder; returns raw RGBA for sharp. */
 async function decodeHeicWasm(filePath: string): Promise<sharp.Sharp> {
   const { default: heicDecode } = await import('heic-decode');
@@ -27,9 +19,28 @@ export function normalizeSize(size: unknown): number {
 
 export class ThumbnailError extends Error {}
 
+async function writeThumb(pipeline: sharp.Sharp, size: number, target: string): Promise<void> {
+  const tmp = target + `.${process.pid}.tmp`;
+  try {
+    await pipeline
+      .resize(size, size, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 82 })
+      .toFile(tmp);
+    fs.renameSync(tmp, target);
+  } catch (err) {
+    fs.rmSync(tmp, { force: true });
+    throw err;
+  }
+}
+
 /**
  * Thumbnails are a derived cache in DATA_DIR/cache/thumbs, keyed by content
  * hash + size, regenerated on demand. Never stored inside PHOTOS_ROOT.
+ *
+ * HEIC: sharp handles it when the build supports HEIF; otherwise (typical
+ * prebuilt sharp lacks HEVC) we retry with the libheif WASM decoder. If
+ * both fail the caller gets a ThumbnailError and the UI shows a labelled
+ * placeholder — never a broken image.
  */
 export async function getThumbnail(
   cacheDir: string,
@@ -44,30 +55,19 @@ export async function getThumbnail(
 
   const source = path.join(photosRoot, relPath);
   if (!fs.existsSync(source)) throw new ThumbnailError('original missing');
-
-  let pipeline: sharp.Sharp;
-  const isHeic = mimeType === 'image/heic' || mimeType === 'image/heif';
-  if (isHeic && !(await checkSharpHeif())) {
-    try {
-      pipeline = await decodeHeicWasm(source);
-    } catch (err) {
-      throw new ThumbnailError(`HEIC decode failed: ${(err as Error).message}`);
-    }
-  } else {
-    pipeline = sharp(source).rotate(); // rotate() applies EXIF orientation
-  }
-
   fs.mkdirSync(cacheDir, { recursive: true });
-  const tmp = cached + `.${process.pid}.tmp`;
+
   try {
-    await pipeline
-      .resize(size, size, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 82 })
-      .toFile(tmp);
-    fs.renameSync(tmp, cached);
-  } catch (err) {
-    fs.rmSync(tmp, { force: true });
-    throw new ThumbnailError(`thumbnail generation failed: ${(err as Error).message}`);
+    await writeThumb(sharp(source).rotate(), size, cached); // rotate() applies EXIF orientation
+    return cached;
+  } catch (sharpErr) {
+    const isHeic = mimeType === 'image/heic' || mimeType === 'image/heif';
+    if (!isHeic) throw new ThumbnailError(`thumbnail generation failed: ${(sharpErr as Error).message}`);
+    try {
+      await writeThumb(await decodeHeicWasm(source), size, cached);
+      return cached;
+    } catch (wasmErr) {
+      throw new ThumbnailError(`HEIC decode failed: ${(wasmErr as Error).message}`);
+    }
   }
-  return cached;
 }

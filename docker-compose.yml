@@ -1,0 +1,28 @@
+services:
+  moments:
+    build: .
+    # or, once you publish an image: image: yourname/moments:latest
+    container_name: moments
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    volumes:
+      # LEFT side: real paths on your NAS/PC. RIGHT side: leave as is.
+      # /photos IS your library — back this folder up and you have everything.
+      - ./data/photos:/photos
+      - ./data/app:/data
+    environment:
+      - PORT=3000
+      # - GOOGLE_CLIENT_ID=...   (phase two, Google Drive backup)
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3000/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

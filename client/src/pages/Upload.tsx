@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppState } from '../state';
 import { Button, Card, EmptyState, Field, inputCls } from '../components/ui';
 
@@ -15,8 +15,13 @@ interface QueuedFile {
 export default function Upload() {
   const { children } = useAppState();
   const [queue, setQueue] = useState<QueuedFile[]>([]);
-  const [selected, setSelected] = useState<string[]>(children.length === 1 ? [children[0].id] : []);
+  const [selected, setSelected] = useState<string[]>([]);
   const [caption, setCaption] = useState('');
+
+  // an only child is selected automatically once children load
+  useEffect(() => {
+    if (children.length === 1) setSelected((prev) => (prev.length > 0 ? prev : [children[0].id]));
+  }, [children]);
   const [tags, setTags] = useState('');
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);

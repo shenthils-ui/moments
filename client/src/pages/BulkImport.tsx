@@ -24,8 +24,13 @@ export default function BulkImport() {
   const [sourcePath, setSourcePath] = useState('');
   const [scan, setScan] = useState<Job | null>(null);
   const [run, setRun] = useState<Job | null>(null);
-  const [selected, setSelected] = useState<string[]>(children.length === 1 ? [children[0].id] : []);
+  const [selected, setSelected] = useState<string[]>([]);
   const [mode, setMode] = useState<'copy' | 'move'>('copy');
+
+  // an only child is selected automatically once children load
+  useEffect(() => {
+    if (children.length === 1) setSelected((prev) => (prev.length > 0 ? prev : [children[0].id]));
+  }, [children]);
   const [error, setError] = useState('');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
