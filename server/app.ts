@@ -605,6 +605,24 @@ export function createApp(config: AppConfig): AppContext {
 
   app.get('/healthz', (_req, res) => res.json({ ok: true, app: APP_NAME }));
 
+  // Generated so the app name lives in exactly one place (shared/appName.ts).
+  app.get('/manifest.webmanifest', (_req, res) => {
+    res.setHeader('Content-Type', 'application/manifest+json');
+    res.json({
+      name: APP_NAME,
+      short_name: APP_NAME,
+      start_url: '/',
+      display: 'standalone',
+      background_color: '#0f172a',
+      theme_color: '#0f172a',
+      icons: [
+        { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' },
+        { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+        { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+      ],
+    });
+  });
+
   const clientDir = path.resolve(import.meta.dirname, '../client');
   if (fs.existsSync(path.join(clientDir, 'index.html'))) {
     app.use(express.static(clientDir));

@@ -13,5 +13,12 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["client/src/**/*.ts", "client/src/**/*.tsx", "shared/**/*.ts", "tests/**/*.ts", "e2e/**/*.ts"]
+  "include": [
+    "client/src/**/*.ts",
+    "client/src/**/*.tsx",
+    "shared/**/*.ts",
+    "tests/**/*.ts",
+    "e2e/**/*.ts",
+    "server/heic-decode.d.ts"
+  ]
 }
