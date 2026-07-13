@@ -129,7 +129,9 @@ npm run dev:client     # Vite dev server on :5173, proxies /api
 npm run build          # server -> dist/server, client -> dist/client
 npm start              # run the built app
 npm test               # API tests (vitest + supertest)
-npm run e2e            # Playwright end-to-end suite (needs `npm run build` first)
+npm run e2e            # Playwright end-to-end suite (needs `npm run build` first,
+                       # and `npx playwright install chromium` once — or point
+                       # CHROMIUM_PATH at an existing Chromium binary)
 npm run verify         # build + all of the above, one command
 ```
 
