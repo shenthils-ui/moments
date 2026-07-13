@@ -51,6 +51,11 @@ export default function Settings() {
         <p className="mt-3 text-xs text-slate-500">
           Back up the photo folder above and you have everything — photos as plain files plus <span className="font-mono">_meta/metadata.json</span> with all captions and children.
         </p>
+        <div className="mt-3">
+          <Link to="/backup" className="rounded-lg bg-pink-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-400">
+            Backup mirrors (USB / NAS / Google Drive) →
+          </Link>
+        </div>
       </Card>
 
       <PasswordSection authEnabled={status?.authEnabled ?? false} refresh={refresh} />

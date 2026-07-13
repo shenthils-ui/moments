@@ -7,6 +7,8 @@ import express, { type Express, type Request, type Response } from 'express';
 import multer from 'multer';
 import { APP_NAME } from '../shared/appName.js';
 import type { Child, Photo } from '../shared/types.js';
+import { BackupManager } from './backup/engine.js';
+import { GoogleDriveTarget, buildAuthUrl, exchangeCode } from './backup/gdrive.js';
 import {
   SESSION_COOKIE,
   authEnabled,
@@ -32,6 +34,7 @@ export interface AppContext {
   db: DB;
   config: AppConfig;
   snapshots: SnapshotWriter;
+  backups: BackupManager;
   close: () => void;
 }
 
@@ -601,6 +604,132 @@ export function createApp(config: AppConfig): AppContext {
     void archive.finalize();
   });
 
+  // ---- backup (phase two) ----------------------------------------------------
+
+  const backups = new BackupManager(db, config, snapshots);
+  backups.recoverInterrupted();
+  backups.startScheduler();
+
+  api.get('/backup/targets', async (_req, res) => {
+    const targets = backups.listTargets();
+    const out = [];
+    for (const target of targets) {
+      const instance = backups.instantiate(target);
+      out.push({
+        ...target,
+        config: target.kind === 'local' ? target.config : {}, // never leak token-adjacent config
+        connected: await instance.isConnected().catch(() => false),
+        activeRun: backups.activeRun(target.id),
+        lastRun: backups.listRuns(target.id, 1)[0] ?? null,
+        fileCount: (
+          db.prepare('SELECT COUNT(*) AS c FROM backup_files WHERE targetId = ?').get(target.id) as { c: number }
+        ).c,
+      });
+    }
+    res.json(out);
+  });
+
+  api.post('/backup/targets', (req, res) => {
+    try {
+      res.status(201).json(backups.createTarget(req.body ?? {}));
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+    }
+  });
+
+  api.patch('/backup/targets/:id', (req, res) => {
+    try {
+      res.json(backups.updateTarget(req.params.id, req.body ?? {}));
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+    }
+  });
+
+  api.delete('/backup/targets/:id', (req, res) => {
+    const target = backups.getTarget(req.params.id);
+    if (!target) return res.status(404).json({ error: 'target not found' });
+    if (target.kind === 'gdrive') {
+      (backups.instantiate(target) as GoogleDriveTarget).disconnect();
+    }
+    backups.deleteTarget(target.id);
+    res.json({ ok: true });
+  });
+
+  api.post('/backup/targets/:id/run', (req, res) => {
+    try {
+      res.json(backups.startRun(req.params.id));
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+    }
+  });
+
+  api.get('/backup/targets/:id/runs', (req, res) => {
+    res.json(backups.listRuns(req.params.id));
+  });
+
+  api.get('/backup/runs/:id', (req, res) => {
+    const run = backups.getRun(req.params.id);
+    if (!run) return res.status(404).json({ error: 'run not found' });
+    res.json(run);
+  });
+
+  api.post('/backup/targets/:id/verify', async (req, res) => {
+    try {
+      const sampleRate = Number(req.body?.sampleRate ?? 0.01);
+      res.json(await backups.verify(req.params.id, Math.min(1, Math.max(0.0001, sampleRate))));
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+    }
+  });
+
+  // ---- backup: Google Drive OAuth --------------------------------------------
+
+  const pendingOAuth = new Map<string, { verifier: string; targetId: string }>();
+
+  api.get('/backup/gdrive/status', (_req, res) => {
+    res.json({ clientIdSet: Boolean(process.env.GOOGLE_CLIENT_ID) });
+  });
+
+  api.get('/backup/gdrive/auth-url', (req, res) => {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      return res.status(400).json({ error: 'GOOGLE_CLIENT_ID is not set on the server — see the README.' });
+    }
+    const target = backups.getTarget(String(req.query.targetId ?? ''));
+    if (!target || target.kind !== 'gdrive') return res.status(404).json({ error: 'target not found' });
+    const state = crypto.randomBytes(16).toString('hex');
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+    pendingOAuth.set(state, { verifier, targetId: target.id });
+    const redirectUri = `${req.protocol}://${req.get('host')}/api/backup/gdrive/callback`;
+    res.json({ url: buildAuthUrl(clientId, redirectUri, state, challenge) });
+  });
+
+  api.get('/backup/gdrive/callback', async (req, res) => {
+    const { code, state, error } = req.query as Record<string, string>;
+    const pending = state ? pendingOAuth.get(state) : undefined;
+    if (error || !code || !pending) {
+      return res.redirect(`/#/backup?connect_error=${encodeURIComponent(error ?? 'missing code or state')}`);
+    }
+    pendingOAuth.delete(state);
+    try {
+      const redirectUri = `${req.protocol}://${req.get('host')}/api/backup/gdrive/callback`;
+      const { refreshToken } = await exchangeCode(
+        process.env.GOOGLE_CLIENT_ID!,
+        process.env.GOOGLE_CLIENT_SECRET,
+        code,
+        redirectUri,
+        pending.verifier,
+      );
+      const target = backups.getTarget(pending.targetId);
+      if (!target) throw new Error('target was deleted during the consent flow');
+      (backups.instantiate(target) as GoogleDriveTarget).setRefreshToken(refreshToken);
+      res.redirect('/#/backup?connected=1');
+    } catch (err) {
+      res.redirect(`/#/backup?connect_error=${encodeURIComponent((err as Error).message)}`);
+    }
+  });
+
   // ---- static client + health ----------------------------------------------
 
   app.get('/healthz', (_req, res) => res.json({ ok: true, app: APP_NAME }));
@@ -631,9 +760,10 @@ export function createApp(config: AppConfig): AppContext {
 
   const close = () => {
     snapshots.flush();
+    backups.stop();
     clearInterval(purgeTimer);
     db.close();
   };
 
-  return { app, db, config, snapshots, close };
+  return { app, db, config, snapshots, backups, close };
 }

@@ -17,6 +17,7 @@ export class ServerHandle {
   constructor(
     public photosRoot: string,
     public dataDir: string,
+    public extraEnv: Record<string, string> = {},
   ) {}
 
   async start(): Promise<void> {
@@ -28,6 +29,7 @@ export class ServerHandle {
         DATA_DIR: this.dataDir,
         PORT: String(PORT),
         NO_QR: '1',
+        ...this.extraEnv,
       },
       stdio: 'ignore',
     });
@@ -54,6 +56,17 @@ export class ServerHandle {
       setTimeout(() => {
         proc.kill('SIGKILL');
       }, 5000).unref();
+    });
+  }
+
+  /** Hard kill (SIGKILL): nothing flushes, exactly like a crash or power cut. */
+  async kill(): Promise<void> {
+    const proc = this.proc;
+    if (!proc) return;
+    this.proc = null;
+    await new Promise<void>((resolve) => {
+      proc.once('exit', () => resolve());
+      proc.kill('SIGKILL');
     });
   }
 

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Full phase-one verification: type checks, build, API tests, and the
- * Playwright suite (wizard, upload+EXIF+dedupe, timeline ages, restart
- * persistence, all views, bulk import, the recovery drill, and the
- * zero-external-requests check). Run after every change.
+ * Full verification: type checks, build, API tests (upload pipeline, dedupe,
+ * trash, restore, rebuild, auth, backup engine, Drive mock), and the
+ * Playwright suites (wizard, timeline ages, restart persistence, all views,
+ * bulk import, the recovery drill, zero-external-requests, backup
+ * interrupt/resume, and the disaster drill). Run after every change.
  *
  *   node scripts/verify.mjs
  *
@@ -29,4 +30,4 @@ for (const [name, cmd] of steps) {
   }
 }
 
-console.log('\nAll phase-one verification passed.');
+console.log('\nAll verification passed (API + e2e, both phases: recovery drill, backup interrupt/resume, disaster drill).');

@@ -13,7 +13,9 @@ services:
       - ./data/app:/data
     environment:
       - PORT=3000
-      # - GOOGLE_CLIENT_ID=...   (phase two, Google Drive backup)
+      # For the Google Drive backup target (see README → Google Drive backup):
+      # - GOOGLE_CLIENT_ID=...
+      # - GOOGLE_CLIENT_SECRET=...
     healthcheck:
       test:
         [

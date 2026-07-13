@@ -1,6 +1,7 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { APP_NAME } from '../../shared/appName';
 import { Button, Spinner } from './components/ui';
+import Backup from './pages/Backup';
 import BulkImport from './pages/BulkImport';
 import Calendar from './pages/Calendar';
 import Folders from './pages/Folders';
@@ -82,6 +83,7 @@ export default function App() {
           <Route path="/milestones" element={<Milestones />} />
           <Route path="/folders" element={<Folders />} />
           <Route path="/import" element={<BulkImport />} />
+          <Route path="/backup" element={<Backup />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/trash" element={<Trash />} />
           <Route path="*" element={<Navigate to="/" replace />} />

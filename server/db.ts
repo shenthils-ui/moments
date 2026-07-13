@@ -4,7 +4,7 @@ import type { Child, Photo, TakenAtSource, PhotoStatus } from '../shared/types.j
 
 export type DB = Database.Database;
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const MIGRATIONS: Record<number, (db: DB) => void> = {
   1: (db) => {
@@ -49,6 +49,45 @@ const MIGRATIONS: Record<number, (db: DB) => void> = {
         token TEXT PRIMARY KEY,
         createdAt TEXT NOT NULL
       );
+    `);
+  },
+  2: (db) => {
+    db.exec(`
+      CREATE TABLE backup_targets (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        displayName TEXT NOT NULL,
+        config TEXT NOT NULL DEFAULT '{}',
+        schedule TEXT NOT NULL DEFAULT '{"mode":"manual"}',
+        mirrorDeletions INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL
+      );
+      CREATE TABLE backup_files (
+        targetId TEXT NOT NULL REFERENCES backup_targets(id) ON DELETE CASCADE,
+        relPath TEXT NOT NULL,
+        contentHash TEXT NOT NULL,
+        sizeBytes INTEGER NOT NULL DEFAULT 0,
+        uploadedAt TEXT NOT NULL,
+        verifiedAt TEXT,
+        PRIMARY KEY (targetId, relPath)
+      );
+      CREATE INDEX idx_backup_files_hash ON backup_files(targetId, contentHash);
+      CREATE TABLE backup_runs (
+        id TEXT PRIMARY KEY,
+        targetId TEXT NOT NULL REFERENCES backup_targets(id) ON DELETE CASCADE,
+        state TEXT NOT NULL,
+        startedAt TEXT NOT NULL,
+        finishedAt TEXT,
+        total INTEGER NOT NULL DEFAULT 0,
+        processed INTEGER NOT NULL DEFAULT 0,
+        uploaded INTEGER NOT NULL DEFAULT 0,
+        skipped INTEGER NOT NULL DEFAULT 0,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        failed INTEGER NOT NULL DEFAULT 0,
+        error TEXT,
+        failures TEXT NOT NULL DEFAULT '[]'
+      );
+      CREATE INDEX idx_backup_runs_target ON backup_runs(targetId, startedAt);
     `);
   },
 };

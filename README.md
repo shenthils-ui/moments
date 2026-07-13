@@ -81,12 +81,64 @@ including the image URLs themselves. One password for the whole family.
 - **RAID is not backup.** RAID protects against a dead disk, not against
   accidental deletion, ransomware, fire or theft.
 - Keep **at least one copy off-site** (an external disk at a relative's
-  house, or the Drive mirror coming in phase two).
+  house, or the built-in Google Drive mirror below).
 - Restore = copy the folder back, start Moments pointed at it, accept the
   restore prompt. You can rehearse this any time — it's read-only for your
   files. If even `metadata.json` is lost, **Settings → Rebuild index from
   folders** brings every photo back from the files alone (captions can't be
   recovered that way).
+
+### Built-in backup mirrors (Settings → Backup)
+
+Moments can mirror the photo folder to one or more targets, on a schedule
+(manual, hourly, or daily at a set time):
+
+- **Local folder** — an external USB disk, a mounted NAS share, a second
+  drive. The mirror is the same plain folder tree; it works without the app.
+- **Google Drive** — see setup below.
+
+How mirroring behaves (by design, not configurable away):
+
+- One-way only: local → target. Your disk is the single source of truth.
+- A run uploads only what's missing at the target (compared by content
+  hash), retries with backoff, survives restarts mid-run, and never blocks
+  browsing or uploads.
+- **Nothing is ever deleted at the target by default.** The optional
+  per-target "mirror deletions" switch only removes files whose photo was
+  deleted in the app AND already purged from the 30-day trash.
+- After each upload the size (and checksum where available) is verified;
+  "Verify backup" re-checks a random 1% sample any time and reports drift.
+
+### Google Drive backup — one-time OAuth setup
+
+Moments uses the minimal `drive.file` permission: it can only see files it
+uploaded itself, nothing else in your Drive. Google requires you to create
+your own (free) OAuth client once:
+
+1. Go to <https://console.cloud.google.com> and sign in.
+2. Create a project (name it e.g. `moments-backup`).
+3. **APIs & Services → Library** → search "Google Drive API" → Enable.
+4. **APIs & Services → OAuth consent screen**: choose External, fill in
+   just the app name and your email, add yourself as a **test user**
+   (that's enough — the app stays in testing mode, only you can use it).
+5. **APIs & Services → Credentials → Create credentials → OAuth client
+   ID** → type **Web application**. Under "Authorised redirect URIs" add:
+   `http://localhost:3000/api/backup/gdrive/callback` — and if you'll
+   connect from another address, that one too, e.g.
+   `http://192.168.1.50:3000/api/backup/gdrive/callback`.
+6. Copy the **Client ID** and **Client secret**, then start Moments with
+   them set as environment variables (never commit them anywhere):
+   - Windows: `set GOOGLE_CLIENT_ID=...` and `set GOOGLE_CLIENT_SECRET=...`
+     before `start.bat`, or set them in System → Environment Variables.
+   - Docker: uncomment the lines in `docker-compose.yml`.
+7. In Moments: **Settings → Backup → Google Drive → Add**, then
+   **Connect** and approve in the browser. Done — the refresh token is
+   stored server-side (0600 permissions) and never shown to any browser.
+
+A 10-minute manual test list for the Drive target lives in
+[`docs/manual-drive-checklist.md`](docs/manual-drive-checklist.md).
+Extending backups to S3/Cloudflare R2 is documented in
+[`docs/backup-targets.md`](docs/backup-targets.md).
 
 ## Moving to a NAS (Synology / QNAP)
 
@@ -146,10 +198,9 @@ npm run verify         # build + all of the above, one command
   comes back. Run it after any change to storage code.
 - Renaming the app is a one-line change in `shared/appName.ts`.
 
-## Phase two (planned, not yet built)
+## Docs
 
-One-way backup mirrors from `PHOTOS_ROOT` to a local folder / USB disk and
-to Google Drive (OAuth `drive.file` scope, resumable uploads), with
-scheduling, verification, and a documented S3/R2 target mapping. The design
-principles are fixed: local disk is the single authoritative copy, mirrors
-are one-way, and a backup run never deletes at the target by default.
+- [`docs/backup-targets.md`](docs/backup-targets.md) — backup architecture
+  and the S3/Cloudflare R2 target mapping (future).
+- [`docs/manual-drive-checklist.md`](docs/manual-drive-checklist.md) —
+  10-minute manual smoke test for the real Google Drive target.
