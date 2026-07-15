@@ -76,7 +76,7 @@ export function Lightbox({ photos, index, onClose, onNavigate, onChange, onDelet
         }}
       >
         {index > 0 && (
-          <button onClick={() => onNavigate(index - 1)} className="absolute left-2 z-10 rounded-full bg-black/50 p-3 text-xl text-white">
+          <button aria-label="Previous photo" onClick={() => onNavigate(index - 1)} className="absolute left-2 z-10 rounded-full bg-black/50 p-3 text-xl text-white">
             ‹
           </button>
         )}
@@ -96,7 +96,7 @@ export function Lightbox({ photos, index, onClose, onNavigate, onChange, onDelet
           />
         )}
         {index < photos.length - 1 && (
-          <button onClick={() => onNavigate(index + 1)} className="absolute right-2 z-10 rounded-full bg-black/50 p-3 text-xl text-white">
+          <button aria-label="Next photo" onClick={() => onNavigate(index + 1)} className="absolute right-2 z-10 rounded-full bg-black/50 p-3 text-xl text-white">
             ›
           </button>
         )}

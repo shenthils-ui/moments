@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { purgeExpiredSessions } from '../server/auth.js';
 import { writeSnapshotNow } from '../server/metadata.js';
 import { completeSetup, makeEnv, makeJpeg, type TestEnv } from './helpers.js';
 
@@ -293,6 +294,27 @@ describe('auth', () => {
     await agent.post('/api/auth/password').send({ password: null, currentPassword: 'hunter2' }).expect(200);
     await request.agent(env.ctx.app).get('/api/photos').expect(200);
   });
+
+  it('expires stale sessions instead of honouring them forever', async () => {
+    await agent.post('/api/auth/password').send({ password: 'hunter2' }).expect(200);
+    const client = request.agent(env.ctx.app);
+    await client.post('/api/auth/login').send({ password: 'hunter2' }).expect(200);
+    await client.get('/api/photos').expect(200);
+
+    // age every session past the TTL, as if 61 days passed
+    const old = new Date(Date.now() - 61 * 24 * 3600 * 1000).toISOString();
+    env.ctx.db.prepare('UPDATE sessions SET createdAt = ?').run(old);
+
+    await client.get('/api/photos').expect(401); // stale token rejected on use
+    await client.post('/api/auth/login').send({ password: 'hunter2' }).expect(200); // fresh login works again
+    // the daily bulk purge clears every remaining expired token
+    const swept = purgeExpiredSessions(env.ctx.db);
+    expect(swept).toBeGreaterThan(0);
+    const stale = env.ctx.db
+      .prepare('SELECT COUNT(*) AS c FROM sessions WHERE createdAt < ?')
+      .get(new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString()) as { c: number };
+    expect(stale.c).toBe(0);
+  });
 });
 
 describe('misc', () => {
@@ -329,5 +351,24 @@ describe('misc', () => {
     const month = await agent.get('/api/folders?path=Mila/2023/2023-11').expect(200);
     expect(month.body.files).toHaveLength(1);
     expect(month.body.files[0].photo).not.toBeNull();
+  });
+
+  it('folder filter matches names with LIKE metacharacters literally', async () => {
+    // two children whose folder names differ only by an underscore vs. any
+    // char: a naive LIKE would let one match the other.
+    const under = (await agent.post('/api/children').send({ name: '100_days', birthDate: '2023-01-01' }).expect(201))
+      .body.id;
+    const other = (await agent.post('/api/children').send({ name: '100Xdays', birthDate: '2023-01-01' }).expect(201))
+      .body.id;
+    const a = path.join(env.root, 'src', 'under.jpg');
+    const b = path.join(env.root, 'src', 'other.jpg');
+    await makeJpeg(a, '2023:05:05 10:00:00');
+    await makeJpeg(b, '2023:05:05 11:00:00');
+    await agent.post('/api/upload').field('childIds', JSON.stringify([under])).attach('files', a).expect(200);
+    await agent.post('/api/upload').field('childIds', JSON.stringify([other])).attach('files', b).expect(200);
+
+    const res = await agent.get('/api/photos?folder=100_days').expect(200);
+    expect(res.body.total).toBe(1); // only the literal "100_days" folder, not "100Xdays"
+    expect(res.body.photos[0].relPath.startsWith('100_days/')).toBe(true);
   });
 });

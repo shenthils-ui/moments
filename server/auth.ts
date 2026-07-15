@@ -4,6 +4,12 @@ import { type DB, getSetting, setSetting } from './db.js';
 
 export const SESSION_COOKIE = 'moments_session';
 
+// Sessions are long-lived (this is a family app on a trusted network), but
+// not eternal: stale tokens are rejected and swept so the table can't grow
+// without bound and a leaked cookie doesn't stay valid for years.
+export const SESSION_TTL_DAYS = 60;
+const SESSION_TTL_MS = SESSION_TTL_DAYS * 24 * 3600 * 1000;
+
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
@@ -36,7 +42,22 @@ export function isAuthed(db: DB, req: Request): boolean {
   if (!authEnabled(db)) return true;
   const token = req.cookies?.[SESSION_COOKIE];
   if (!token) return false;
-  return Boolean(db.prepare('SELECT token FROM sessions WHERE token = ?').get(token));
+  const row = db.prepare('SELECT createdAt FROM sessions WHERE token = ?').get(token) as
+    | { createdAt: string }
+    | undefined;
+  if (!row) return false;
+  if (Date.now() - new Date(row.createdAt).getTime() > SESSION_TTL_MS) {
+    db.prepare('DELETE FROM sessions WHERE token = ?').run(token); // expired: sweep it now
+    return false;
+  }
+  return true;
+}
+
+/** Remove expired sessions; called at boot and on a daily timer. */
+export function purgeExpiredSessions(db: DB): number {
+  const cutoff = new Date(Date.now() - SESSION_TTL_MS).toISOString();
+  const info = db.prepare('DELETE FROM sessions WHERE createdAt < ?').run(cutoff);
+  return info.changes;
 }
 
 /**

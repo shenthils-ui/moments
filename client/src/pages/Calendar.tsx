@@ -49,9 +49,9 @@ export default function Calendar() {
       <h1 className="text-2xl font-bold text-slate-100">Calendar</h1>
       <ChildChips selected={child} onSelect={setChild} />
       <div className="flex items-center justify-between">
-        <button onClick={() => shift(-1)} className="rounded-lg px-3 py-1 text-xl text-slate-300 hover:bg-slate-800">‹</button>
+        <button aria-label="Previous month" onClick={() => shift(-1)} className="rounded-lg px-3 py-1 text-xl text-slate-300 hover:bg-slate-800">‹</button>
         <h2 className="text-lg font-semibold text-slate-100">{monthLabel}</h2>
-        <button onClick={() => shift(1)} className="rounded-lg px-3 py-1 text-xl text-slate-300 hover:bg-slate-800">›</button>
+        <button aria-label="Next month" onClick={() => shift(1)} className="rounded-lg px-3 py-1 text-xl text-slate-300 hover:bg-slate-800">›</button>
       </div>
 
       <div className="grid grid-cols-7 gap-1 text-center">

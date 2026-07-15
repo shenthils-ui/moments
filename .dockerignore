@@ -1,0 +1,14 @@
+# Keep the Docker build context small and free of host state.
+# Nothing here should ever be baked into the image — deps are reinstalled
+# with `npm ci`, the app is rebuilt from source, and data/ holds the user's
+# actual photos and database.
+node_modules
+dist
+data
+test-results
+playwright-report
+.git
+.gitignore
+*.local
+npm-debug.log*
+tests/fixtures/sample.heic

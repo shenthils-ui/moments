@@ -15,6 +15,7 @@ import {
   createSession,
   destroySession,
   isAuthed,
+  purgeExpiredSessions,
   requireAuth,
   setPassword,
   verifyPassword,
@@ -46,8 +47,12 @@ export function createApp(config: AppConfig): AppContext {
   const thumbsDir = path.join(config.dataDir, 'cache', 'thumbs');
   const tmpDir = path.join(config.dataDir, 'tmp');
 
-  purgeExpired(db, config.photosRoot);
-  const purgeTimer = setInterval(() => purgeExpired(db, config.photosRoot), 24 * 3600 * 1000);
+  const purgeAll = () => {
+    purgeExpired(db, config.photosRoot);
+    purgeExpiredSessions(db);
+  };
+  purgeAll();
+  const purgeTimer = setInterval(purgeAll, 24 * 3600 * 1000);
   purgeTimer.unref?.();
 
   const app = express();
@@ -279,8 +284,10 @@ export function createApp(config: AppConfig): AppContext {
       params.milestone = String(milestone);
     }
     if (folder) {
-      where.push("p.relPath LIKE @folder || '/%'");
-      params.folder = String(folder);
+      // Escape LIKE metacharacters so a folder name containing _ or %
+      // (e.g. a child called "100_days") matches literally, not as a wildcard.
+      where.push("p.relPath LIKE @folder ESCAPE '\\'");
+      params.folder = String(folder).replace(/[\\%_]/g, '\\$&') + '/%';
     }
 
     const clause = where.join(' AND ');
