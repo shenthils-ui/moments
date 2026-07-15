@@ -1,7 +1,9 @@
-import { type ChildProcess, spawn } from 'node:child_process';
+import { type ChildProcess, execFileSync, spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
+
+export const ffmpegAvailable = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 
 export const PORT = 3210;
 export const BASE = `http://localhost:${PORT}`;
@@ -92,4 +94,20 @@ export async function makeJpeg(file: string, exifDate?: string): Promise<void> {
   if (exifDate) pipeline = pipeline.withExif({ IFD2: { DateTimeOriginal: exifDate } });
   fs.mkdirSync(path.dirname(file), { recursive: true });
   await pipeline.jpeg().toFile(file);
+}
+
+/**
+ * Small test video (needs ffmpeg on PATH); optional container creation time.
+ * Defaults to WebM/VP9 so it plays in the open-source Chromium used by the
+ * e2e browser (which lacks the H.264 decoder). The app supports both.
+ */
+export function makeVideo(file: string, seconds = 2, creationTime?: string): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const isWebm = file.toLowerCase().endsWith('.webm');
+  const args = ['-y', '-f', 'lavfi', '-i', `testsrc=duration=${seconds}:size=320x240:rate=15`];
+  if (isWebm) args.push('-c:v', 'libvpx-vp9', '-b:v', '200k', '-pix_fmt', 'yuv420p');
+  else args.push('-pix_fmt', 'yuv420p');
+  if (creationTime) args.push('-metadata', `creation_time=${creationTime}`);
+  args.push(file);
+  execFileSync('ffmpeg', args, { stdio: 'ignore' });
 }

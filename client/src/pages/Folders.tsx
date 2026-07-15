@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Photo } from '../../../shared/types';
 import { api } from '../api';
 import { Lightbox } from '../components/Lightbox';
-import { Thumb } from '../components/PhotoGrid';
+import { Thumb, VideoOverlay } from '../components/PhotoGrid';
 import { EmptyState, Spinner } from '../components/ui';
 
 interface FolderListing {
@@ -77,6 +77,7 @@ export default function Folders() {
               return file.photo ? (
                 <button key={file.name} onClick={() => setOpen(idx)} className="relative aspect-square overflow-hidden rounded-md">
                   <Thumb photo={file.photo} className="absolute inset-0 h-full w-full" />
+                  {file.photo.kind === 'video' && <VideoOverlay photo={file.photo} />}
                 </button>
               ) : (
                 <div key={file.name} className="flex aspect-square flex-col items-center justify-center rounded-md bg-slate-800 p-1 text-center">

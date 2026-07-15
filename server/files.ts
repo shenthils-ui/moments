@@ -5,17 +5,31 @@ import exifr from 'exifr';
 import sharp from 'sharp';
 import type { TakenAtSource } from '../shared/types.js';
 
-export const IMAGE_EXTENSIONS: Record<string, string> = {
+export const MEDIA_EXTENSIONS: Record<string, string> = {
+  // images
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.png': 'image/png',
   '.webp': 'image/webp',
+  '.gif': 'image/gif',
   '.heic': 'image/heic',
   '.heif': 'image/heif',
+  // videos (stored as-is, played natively; poster frames via ffmpeg)
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.webm': 'video/webm',
 };
 
+/** Back-compat alias; the map now also covers video and gif. */
+export const IMAGE_EXTENSIONS = MEDIA_EXTENSIONS;
+
 export function mimeForFile(filename: string): string | null {
-  return IMAGE_EXTENSIONS[path.extname(filename).toLowerCase()] ?? null;
+  return MEDIA_EXTENSIONS[path.extname(filename).toLowerCase()] ?? null;
+}
+
+export function isVideoMime(mimeType: string): boolean {
+  return mimeType.startsWith('video/');
 }
 
 export function sha256File(filePath: string): Promise<string> {
@@ -50,6 +64,50 @@ export async function resolveTakenAt(filePath: string, fallbackMtimeMs?: number)
   }
   const mtimeMs = fallbackMtimeMs ?? fs.statSync(filePath).mtimeMs;
   return { takenAt: new Date(mtimeMs).toISOString(), source: 'file' };
+}
+
+export interface MediaProbe {
+  takenAt: string;
+  source: TakenAtSource;
+  width: number;
+  height: number;
+  durationSec: number | null;
+}
+
+/**
+ * Single entry point for reading a file's date, dimensions and (for video)
+ * duration. Images go through EXIF/sharp; video through ffprobe. Any failure
+ * degrades to sensible defaults so ingest never blocks on a quirky file.
+ */
+export async function probeMedia(
+  filePath: string,
+  mimeType: string,
+  fallbackMtimeMs?: number,
+): Promise<MediaProbe> {
+  if (isVideoMime(mimeType)) {
+    const { probeVideo } = await import('./media.js');
+    let width = 0;
+    let height = 0;
+    let durationSec: number | null = null;
+    let containerDate: string | null = null;
+    try {
+      const probe = await probeVideo(filePath);
+      width = probe.width;
+      height = probe.height;
+      durationSec = probe.durationSec;
+      containerDate = probe.createdAt;
+    } catch {
+      // no ffprobe / unreadable container: keep defaults, fall back to mtime
+    }
+    if (containerDate) return { takenAt: containerDate, source: 'container', width, height, durationSec };
+    const mtimeMs = fallbackMtimeMs ?? fs.statSync(filePath).mtimeMs;
+    return { takenAt: new Date(mtimeMs).toISOString(), source: 'file', width, height, durationSec };
+  }
+  const [{ takenAt, source }, { width, height }] = await Promise.all([
+    resolveTakenAt(filePath, fallbackMtimeMs),
+    imageDimensions(filePath),
+  ]);
+  return { takenAt, source, width, height, durationSec: null };
 }
 
 export async function imageDimensions(filePath: string): Promise<{ width: number; height: number }> {

@@ -42,6 +42,9 @@ export function Lightbox({ photos, index, onClose, onNavigate, onChange, onDelet
 
   if (!photo) return null;
   const owners = children.filter((c) => photo.childIds.includes(c.id));
+  const isVideo = photo.kind === 'video';
+  // GIFs only animate from the original, not the static poster thumbnail.
+  const isGif = photo.mimeType === 'image/gif';
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/95" data-testid="lightbox">
@@ -50,7 +53,7 @@ export function Lightbox({ photos, index, onClose, onNavigate, onChange, onDelet
           ✕ Close
         </button>
         <div className="flex gap-2">
-          {!fullRes && (
+          {!fullRes && !isVideo && !isGif && (
             <Button small kind="secondary" onClick={() => setFullRes(true)}>
               Full resolution
             </Button>
@@ -82,14 +85,29 @@ export function Lightbox({ photos, index, onClose, onNavigate, onChange, onDelet
         )}
         {failed ? (
           <div className="flex flex-col items-center gap-2 text-slate-400">
-            <span className="text-6xl">🖼️</span>
-            <p className="text-sm">No preview available for this file ({photo.filename.split('.').pop()?.toUpperCase()}).</p>
+            <span className="text-6xl">{isVideo ? '🎬' : '🖼️'}</span>
+            <p className="text-sm">
+              {isVideo ? "This video's format can't play in the browser" : 'No preview available for this file'} (
+              {photo.filename.split('.').pop()?.toUpperCase()}).
+            </p>
             <p className="text-xs">The original is safe on disk — use Download to view it elsewhere.</p>
           </div>
+        ) : isVideo ? (
+          <video
+            key={photo.id}
+            src={originalUrl(photo.id)}
+            poster={thumbUrl(photo.id, 1024)}
+            controls
+            autoPlay
+            playsInline
+            onError={() => setFailed(true)}
+            className="max-h-full max-w-full"
+            data-testid="lightbox-video"
+          />
         ) : (
           <img
             key={fullRes ? 'full' : 'fit'}
-            src={fullRes ? originalUrl(photo.id) : thumbUrl(photo.id, 1024)}
+            src={fullRes || isGif ? originalUrl(photo.id) : thumbUrl(photo.id, 1024)}
             alt={photo.caption || photo.filename}
             onError={() => setFailed(true)}
             className="max-h-full max-w-full object-contain"

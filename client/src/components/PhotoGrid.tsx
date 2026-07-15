@@ -1,6 +1,23 @@
 import { useState } from 'react';
 import type { Photo } from '../../../shared/types';
 import { thumbUrl } from '../api';
+import { formatDuration } from '../util';
+
+/** Play triangle + duration overlaid on a video's poster thumbnail. */
+export function VideoOverlay({ photo }: { photo: Photo }) {
+  return (
+    <>
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white">▶</span>
+      </span>
+      {photo.durationSec !== null && (
+        <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[9px] font-medium text-white">
+          {formatDuration(photo.durationSec)}
+        </span>
+      )}
+    </>
+  );
+}
 
 /**
  * Thumbnail that degrades to a labelled placeholder when the server can't
@@ -43,6 +60,7 @@ export function PhotoGrid({ photos, onOpen }: { photos: Photo[]; onOpen: (index:
           data-testid="photo-tile"
         >
           <Thumb photo={photo} className="absolute inset-0 h-full w-full" />
+          {photo.kind === 'video' && <VideoOverlay photo={photo} />}
           {photo.milestone && (
             <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 py-0.5 text-[9px] text-amber-300">
               ★ {photo.milestone}

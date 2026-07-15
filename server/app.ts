@@ -63,7 +63,8 @@ export function createApp(config: AppConfig): AppContext {
   app.use('/api', api);
   api.use(requireAuth(db));
 
-  const upload = multer({ dest: tmpDir, limits: { fileSize: 500 * 1024 * 1024 } });
+  // Large limit so full-length videos upload; originals are stored as-is.
+  const upload = multer({ dest: tmpDir, limits: { fileSize: 2 * 1024 * 1024 * 1024 } });
 
   const childById = (id: string): Child | undefined =>
     (db.prepare('SELECT * FROM children WHERE id = ?').get(id) as Child | undefined) ?? undefined;
@@ -255,7 +256,7 @@ export function createApp(config: AppConfig): AppContext {
   // ---- photos ---------------------------------------------------------------
 
   api.get('/photos', (req, res) => {
-    const { child, from, to, tag, milestone, folder } = req.query;
+    const { child, from, to, tag, milestone, folder, kind } = req.query;
     const page = Math.max(1, Number(req.query.page ?? 1));
     const pageSize = Math.min(500, Math.max(1, Number(req.query.pageSize ?? 100)));
 
@@ -265,6 +266,8 @@ export function createApp(config: AppConfig): AppContext {
       where.push('p.id IN (SELECT photoId FROM photo_children WHERE childId = @child)');
       params.child = String(child);
     }
+    if (kind === 'video') where.push("p.mimeType LIKE 'video/%'");
+    else if (kind === 'photo') where.push("p.mimeType NOT LIKE 'video/%'");
     if (from) {
       where.push('p.takenAt >= @from');
       params.from = String(from);

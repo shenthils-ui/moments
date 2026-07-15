@@ -2,6 +2,30 @@
 
 All notable changes to Moments are recorded here. Dates are ISO (YYYY-MM-DD).
 
+## [1.1.0] — 2026-07-15
+
+### Added — videos and GIFs
+
+- **Video support** (`.mp4`, `.mov`, `.m4v`, `.webm`): originals are stored
+  untouched (never re-encoded), with a poster thumbnail, duration, and
+  recording-date extraction via ffmpeg/ffprobe. Videos play in the lightbox
+  with native controls and byte-range seeking; a "download to view" fallback
+  covers codecs a browser can't decode. Timeline/calendar/folder tiles show a
+  play badge and duration.
+- **GIF support** (`.gif`): stored as images, thumbnailed to a static poster,
+  and animated when opened.
+- ffmpeg is resolved from `FFMPEG_PATH`/`FFPROBE_PATH`, then the bundled
+  `ffmpeg-static`/`ffprobe-static` optional dependencies (Windows/dev), then a
+  system `ffmpeg` on `PATH` (used by the Docker image, which now installs it).
+  Without ffmpeg, videos still upload and store; only the poster is skipped.
+- Data model gains `kind` ('photo'|'video', derived) and `durationSec`
+  (schema migration v3). New `?kind=video|photo` filter on the photos API.
+- Upload accepts and previews videos; larger upload size limit (2 GB) for
+  full-length clips.
+- Tests: 7 new API tests (video ingest, poster, mtime fallback, range
+  streaming, kind filter, rebuild) and a new browser e2e that uploads a video
+  and plays it. Video tests skip gracefully where ffmpeg is absent.
+
 ## [1.0.0] — 2026-07-15
 
 First complete release: a private, self-hosted family photo timeline where
@@ -74,7 +98,6 @@ kill), and the full disaster drill. One command: `npm run verify`.
 
 ### Known limitations
 
-- Video is out of scope for v1 (images only: JPEG, PNG, WebP, HEIC).
 - UI is English-only.
 - The backup diff is by content hash, so a file whose local path changes while
   its bytes stay identical keeps its old path at the target until re-uploaded

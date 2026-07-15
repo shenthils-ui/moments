@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Photo } from '../shared/types.js';
 import { type DB, listChildren, insertPhoto, setSetting } from './db.js';
-import { imageDimensions, mimeForFile, resolveTakenAt, safeFolderName, sha256File, walkImages } from './files.js';
+import { mimeForFile, probeMedia, safeFolderName, sha256File, walkImages } from './files.js';
 
 export interface RebuildResult {
   scanned: number;
@@ -58,19 +58,20 @@ export async function rebuildIndex(db: DB, photosRoot: string): Promise<RebuildR
         continue;
       }
 
+      const mimeType = mimeForFile(base)!;
+      const probe = await probeMedia(file, mimeType);
       let takenAt: string;
       let takenAtSource: Photo['takenAtSource'];
       if (match) {
+        // trust the date encoded in our own canonical filename
         const local = new Date(`${match[1]}T${match[2]}:${match[3]}:${match[4]}`);
         takenAt = local.toISOString();
         takenAtSource = 'file';
       } else {
-        const resolved = await resolveTakenAt(file);
-        takenAt = resolved.takenAt;
-        takenAtSource = resolved.source;
+        takenAt = probe.takenAt;
+        takenAtSource = probe.source;
       }
 
-      const { width, height } = await imageDimensions(file);
       insertPhoto(db, {
         id: crypto.randomUUID(),
         contentHash,
@@ -79,9 +80,11 @@ export async function rebuildIndex(db: DB, photosRoot: string): Promise<RebuildR
         takenAtSource,
         relPath: rel,
         filename: base,
-        mimeType: mimeForFile(base)!,
-        width,
-        height,
+        mimeType,
+        kind: mimeType.startsWith('video/') ? 'video' : 'photo',
+        width: probe.width,
+        height: probe.height,
+        durationSec: probe.durationSec,
         sizeBytes: fs.statSync(file).size,
         caption: '',
         tags: [],

@@ -166,11 +166,30 @@ address that works from anywhere — no ports opened on your router:
    `https://<machine>.<tailnet>.ts.net`, with a valid certificate, and the
    install prompt appears on phones.
 
-## Video?
+## Photos and videos
 
-Not in v1 — images only (JPEG, PNG, WebP, HEIC). Keep videos in the same
-folder tree if you like; Moments ignores them and they'll still be in your
-backups.
+Moments handles both:
+
+- **Photos:** JPEG, PNG, WebP, GIF, HEIC.
+- **Videos:** MP4, MOV (QuickTime), M4V, WebM.
+
+Videos are stored exactly as you upload them — **never re-encoded** — just
+like photos. Moments generates a poster thumbnail and reads the duration and
+recording date, then plays the video right in the browser with normal
+controls and seeking. GIFs animate when opened.
+
+A video's format has to be one your browser can decode (H.264 MP4 and WebM
+play virtually everywhere; some phone codecs may not). When a browser can't
+play a particular file, Moments shows a clear message with a **Download**
+button instead of a broken player — the original is always safe on disk.
+
+**Thumbnails and metadata for video need `ffmpeg`.** You don't have to install
+it yourself: on Windows/macOS the `npm install` step fetches a bundled copy
+automatically, and the Docker image installs it. If a system `ffmpeg` is on
+your `PATH`, that's used too. Without ffmpeg, videos still upload and store
+safely — only the poster thumbnail is skipped (a placeholder is shown). You
+can point Moments at a specific binary with the `FFMPEG_PATH` / `FFPROBE_PATH`
+environment variables.
 
 ## For developers
 

@@ -1,5 +1,6 @@
-export type TakenAtSource = 'exif' | 'file' | 'manual';
+export type TakenAtSource = 'exif' | 'container' | 'file' | 'manual';
 export type PhotoStatus = 'active' | 'trashed';
+export type MediaKind = 'photo' | 'video';
 
 export interface Child {
   id: string;
@@ -18,8 +19,10 @@ export interface Photo {
   relPath: string; // path relative to PHOTOS_ROOT, forward slashes
   filename: string;
   mimeType: string;
+  kind: MediaKind; // derived from mimeType; 'video' for video/*, else 'photo'
   width: number;
   height: number;
+  durationSec: number | null; // videos only; null for images
   sizeBytes: number;
   caption: string;
   tags: string[];

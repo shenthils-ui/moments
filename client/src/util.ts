@@ -38,6 +38,16 @@ export function formatDateTime(iso: string): string {
   });
 }
 
+/** Seconds → "m:ss" (or "h:mm:ss" for long clips), for video badges. */
+export function formatDuration(sec: number | null): string {
+  if (sec === null || !Number.isFinite(sec) || sec < 0) return '';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];

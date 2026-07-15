@@ -6,9 +6,8 @@ import { type DB, getPhoto, insertPhoto } from './db.js';
 import {
   canonicalFilename,
   canonicalRelPath,
-  imageDimensions,
   mimeForFile,
-  resolveTakenAt,
+  probeMedia,
   sha256File,
   placeFile,
 } from './files.js';
@@ -54,8 +53,11 @@ export async function ingestFile(db: DB, photosRoot: string, opts: IngestOptions
     return { outcome: 'duplicate', existingId: existing.id, contentHash };
   }
 
-  const { takenAt, source } = await resolveTakenAt(opts.sourcePath, opts.fallbackMtimeMs);
-  const { width, height } = await imageDimensions(opts.sourcePath);
+  const { takenAt, source, width, height, durationSec } = await probeMedia(
+    opts.sourcePath,
+    mimeType,
+    opts.fallbackMtimeMs,
+  );
   const sizeBytes = fs.statSync(opts.sourcePath).size;
   const filename = canonicalFilename(takenAt, contentHash, opts.originalName);
   const relPath = canonicalRelPath(opts.childName, takenAt, filename);
@@ -71,8 +73,10 @@ export async function ingestFile(db: DB, photosRoot: string, opts: IngestOptions
     relPath,
     filename,
     mimeType,
+    kind: mimeType.startsWith('video/') ? 'video' : 'photo',
     width,
     height,
+    durationSec,
     sizeBytes,
     caption: opts.caption ?? '',
     tags: opts.tags ?? [],

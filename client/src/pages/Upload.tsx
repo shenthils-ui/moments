@@ -27,7 +27,7 @@ export default function Upload() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const addFiles = (files: FileList | File[]) => {
-    const accepted = [...files].filter((f) => /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name));
+    const accepted = [...files].filter((f) => /\.(jpe?g|png|webp|gif|heic|heif|mp4|m4v|mov|webm)$/i.test(f.name));
     setQueue((prev) => [
       ...prev,
       ...accepted.map((file) => ({ file, preview: URL.createObjectURL(file), state: 'queued' as FileState, progress: 0 })),
@@ -136,7 +136,7 @@ export default function Upload() {
           ref={inputRef}
           type="file"
           multiple
-          accept=".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic"
+          accept=".jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.mp4,.m4v,.mov,.webm,image/*,video/mp4,video/quicktime,video/webm"
           className="hidden"
           data-testid="file-input"
           onChange={(e) => {
@@ -145,8 +145,8 @@ export default function Upload() {
           }}
         />
         <p className="text-3xl">📸</p>
-        <p className="mt-1 text-sm text-slate-300">Tap to choose photos, or drop them here</p>
-        <p className="text-xs text-slate-500">JPEG, PNG, WebP and HEIC</p>
+        <p className="mt-1 text-sm text-slate-300">Tap to choose photos &amp; videos, or drop them here</p>
+        <p className="text-xs text-slate-500">JPEG, PNG, WebP, GIF, HEIC · MP4, MOV, WebM</p>
       </div>
 
       {queue.length === 0 && <EmptyState icon="🪄" title="Nothing queued yet" hint="Photos you pick will show up here with previews before anything is uploaded." />}
@@ -156,7 +156,14 @@ export default function Upload() {
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 md:grid-cols-6">
             {queue.map((item, i) => (
               <div key={i} className="relative overflow-hidden rounded-lg" data-testid="upload-item">
-                <img src={item.preview} alt={item.file.name} className="aspect-square w-full bg-slate-800 object-cover" />
+                {/\.(mp4|m4v|mov|webm)$/i.test(item.file.name) ? (
+                  <>
+                    <video src={item.preview} muted playsInline preload="metadata" className="aspect-square w-full bg-slate-800 object-cover" />
+                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-xl text-white/90">▶</span>
+                  </>
+                ) : (
+                  <img src={item.preview} alt={item.file.name} className="aspect-square w-full bg-slate-800 object-cover" />
+                )}
                 <div className="absolute inset-x-0 bottom-0 bg-black/70 p-1 text-center text-[10px]">
                   {item.state === 'queued' && <span className="text-slate-300">ready</span>}
                   {item.state === 'uploading' && (
@@ -182,7 +189,7 @@ export default function Upload() {
           )}
           <div className="flex items-center gap-3">
             <Button onClick={() => void start()} disabled={busy || selected.length === 0 || pending === 0}>
-              {busy ? 'Uploading…' : `Upload ${pending} photo${pending === 1 ? '' : 's'}`}
+              {busy ? 'Uploading…' : `Upload ${pending} file${pending === 1 ? '' : 's'}`}
             </Button>
             {selected.length === 0 && <p className="text-sm text-amber-400">Select at least one child first.</p>}
             <Button kind="ghost" onClick={() => setQueue([])} disabled={busy}>

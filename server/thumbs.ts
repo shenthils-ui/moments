@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
+import { isVideoMime } from './files.js';
+import { videoPoster } from './media.js';
 
 const ALLOWED_SIZES = [256, 1024];
 
@@ -56,6 +58,19 @@ export async function getThumbnail(
   const source = path.join(photosRoot, relPath);
   if (!fs.existsSync(source)) throw new ThumbnailError('original missing');
   fs.mkdirSync(cacheDir, { recursive: true });
+
+  // Video: poster frame via ffmpeg (already resized to a JPEG buffer).
+  if (isVideoMime(mimeType)) {
+    try {
+      const jpeg = await videoPoster(source, size);
+      const tmp = cached + `.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, jpeg);
+      fs.renameSync(tmp, cached);
+      return cached;
+    } catch (err) {
+      throw new ThumbnailError(`video poster failed: ${(err as Error).message}`);
+    }
+  }
 
   try {
     await writeThumb(sharp(source).rotate(), size, cached); // rotate() applies EXIF orientation

@@ -79,7 +79,7 @@ test('uploading two EXIF-dated JPEGs plus one exact duplicate yields two photos 
   await page.goto(`${BASE}/#/upload`);
   await page.getByTestId('file-input').setInputFiles([files.a, files.b, files.dupA]);
   await expect(page.getByTestId('upload-item')).toHaveCount(3);
-  await page.getByRole('button', { name: 'Upload 3 photos' }).click();
+  await page.getByRole('button', { name: 'Upload 3 files' }).click();
   await expect(page.getByText('✓ added')).toHaveCount(2);
   await expect(page.getByText('≡ duplicate')).toHaveCount(1);
 });
@@ -116,7 +116,7 @@ test('calendar shows per-day counts and opens a day', async ({ page }) => {
   // one photo in the current month so the default calendar view has data
   await page.goto(`${BASE}/#/upload`);
   await page.getByTestId('file-input').setInputFiles([files.c]);
-  await page.getByRole('button', { name: 'Upload 1 photo' }).click();
+  await page.getByRole('button', { name: 'Upload 1 file' }).click();
   await expect(page.getByText('✓ added')).toHaveCount(1);
 
   await page.goto(`${BASE}/#/calendar`);

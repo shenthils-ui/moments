@@ -1,10 +1,10 @@
 import Database from 'better-sqlite3';
 import path from 'node:path';
-import type { Child, Photo, TakenAtSource, PhotoStatus } from '../shared/types.js';
+import type { Child, Photo, TakenAtSource, PhotoStatus, MediaKind } from '../shared/types.js';
 
 export type DB = Database.Database;
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const MIGRATIONS: Record<number, (db: DB) => void> = {
   1: (db) => {
@@ -90,6 +90,11 @@ const MIGRATIONS: Record<number, (db: DB) => void> = {
       CREATE INDEX idx_backup_runs_target ON backup_runs(targetId, startedAt);
     `);
   },
+  3: (db) => {
+    // Video support: store duration alongside dimensions. Media kind is
+    // derived from mimeType at read time, so no column is needed for it.
+    db.exec(`ALTER TABLE photos ADD COLUMN durationSec INTEGER;`);
+  },
 };
 
 export function openDb(dataDir: string): DB {
@@ -127,6 +132,7 @@ interface PhotoRow {
   mimeType: string;
   width: number;
   height: number;
+  durationSec: number | null;
   sizeBytes: number;
   caption: string;
   tags: string;
@@ -136,11 +142,21 @@ interface PhotoRow {
   createdAt: string;
 }
 
+export function mediaKind(mimeType: string): MediaKind {
+  return mimeType.startsWith('video/') ? 'video' : 'photo';
+}
+
 export function rowToPhoto(db: DB, row: PhotoRow): Photo {
   const childIds = (
     db.prepare('SELECT childId FROM photo_children WHERE photoId = ?').all(row.id) as { childId: string }[]
   ).map((r) => r.childId);
-  return { ...row, tags: JSON.parse(row.tags), childIds };
+  return {
+    ...row,
+    tags: JSON.parse(row.tags),
+    childIds,
+    kind: mediaKind(row.mimeType),
+    durationSec: row.durationSec ?? null,
+  };
 }
 
 export function getPhoto(db: DB, id: string): Photo | null {
@@ -152,10 +168,10 @@ export function insertPhoto(db: DB, photo: Photo): void {
   const insert = db.transaction(() => {
     db.prepare(
       `INSERT INTO photos (id, contentHash, takenAt, takenAtSource, relPath, filename, mimeType,
-         width, height, sizeBytes, caption, tags, milestone, status, trashedAt, createdAt)
+         width, height, durationSec, sizeBytes, caption, tags, milestone, status, trashedAt, createdAt)
        VALUES (@id, @contentHash, @takenAt, @takenAtSource, @relPath, @filename, @mimeType,
-         @width, @height, @sizeBytes, @caption, @tags, @milestone, @status, @trashedAt, @createdAt)`,
-    ).run({ ...photo, tags: JSON.stringify(photo.tags) });
+         @width, @height, @durationSec, @sizeBytes, @caption, @tags, @milestone, @status, @trashedAt, @createdAt)`,
+    ).run({ ...photo, tags: JSON.stringify(photo.tags), durationSec: photo.durationSec ?? null });
     const link = db.prepare('INSERT INTO photo_children (photoId, childId) VALUES (?, ?)');
     for (const childId of photo.childIds) link.run(photo.id, childId);
   });
