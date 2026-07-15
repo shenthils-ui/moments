@@ -13,6 +13,7 @@ interface Job {
   processed: number;
   added: number;
   duplicates: number;
+  datesFixed: number;
   failed: number;
   failures: { file: string; reason: string }[];
   earliest: string | null;
@@ -26,6 +27,7 @@ export default function BulkImport() {
   const [run, setRun] = useState<Job | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [mode, setMode] = useState<'copy' | 'move'>('copy');
+  const [fixDates, setFixDates] = useState(false);
 
   // an only child is selected automatically once children load
   useEffect(() => {
@@ -69,7 +71,7 @@ export default function BulkImport() {
     try {
       const job = await api<Job>('/api/import/run', {
         method: 'POST',
-        body: JSON.stringify({ sourcePath, childIds: selected, mode }),
+        body: JSON.stringify({ sourcePath, childIds: selected, mode, fixDates }),
       });
       setRun(job);
       poll(job.id, setRun);
@@ -156,9 +158,19 @@ export default function BulkImport() {
               Move
             </label>
           </div>
+          <label className="mt-3 flex items-start gap-2 text-sm text-slate-300">
+            <input type="checkbox" className="mt-0.5" checked={fixDates} onChange={(e) => setFixDates(e.target.checked)} />
+            <span>
+              Fix dates of photos already imported
+              <span className="block text-xs text-slate-500">
+                For files already in the library, correct a guessed date using the date in the file or its filename. Use
+                this to repair photos that landed in the wrong month.
+              </span>
+            </span>
+          </label>
           <div className="mt-3">
             <Button onClick={() => void startRun()} disabled={selected.length === 0 || run?.state === 'running'}>
-              {run?.state === 'running' ? 'Importing…' : `Import ${scan.total - scan.duplicates} photos`}
+              {run?.state === 'running' ? 'Importing…' : `Import ${scan.total - scan.duplicates} files`}
             </Button>
           </div>
         </Card>
@@ -172,6 +184,7 @@ export default function BulkImport() {
             <div className="space-y-1 text-sm text-slate-200" data-testid="import-result">
               <p className="text-emerald-400">
                 Done: {run.added} imported, {run.duplicates} duplicates skipped
+                {run.datesFixed > 0 && `, ${run.datesFixed} dates fixed`}
                 {run.failed > 0 && `, ${run.failed} failed`}.
               </p>
               {run.failures.length > 0 && (

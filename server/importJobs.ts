@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DB } from './db.js';
-import { resolveTakenAt, sha256File, walkImages } from './files.js';
+import { mimeForFile, resolveCaptureDate, sha256File, walkImages } from './files.js';
 import { ingestFile } from './ingest.js';
 import type { SnapshotWriter } from './metadata.js';
 
@@ -16,6 +16,7 @@ export interface ImportJob {
   processed: number;
   added: number;
   duplicates: number;
+  datesFixed: number; // existing photos whose guessed date was corrected
   failed: number;
   failures: { file: string; reason: string }[];
   // scan-only results
@@ -24,6 +25,10 @@ export interface ImportJob {
   startedAt: string;
   finishedAt: string | null;
 }
+
+// How much to trust a resolved capture date, for deciding whether to
+// overwrite an existing photo's date. Manual edits are never overwritten.
+const DATE_SOURCE_RANK: Record<string, number> = { manual: 4, exif: 3, container: 3, filename: 2, file: 1 };
 
 /**
  * Bulk import runs as in-process jobs the client polls via
@@ -49,6 +54,7 @@ export class ImportJobs {
       processed: 0,
       added: 0,
       duplicates: 0,
+      datesFixed: 0,
       failed: 0,
       failures: [],
       earliest: null,
@@ -74,12 +80,32 @@ export class ImportJobs {
     childIds: string[],
     childName: string,
     mode: 'copy' | 'move',
+    fixDates = false,
   ): ImportJob {
     const job = this.create('import', sourcePath);
-    void this.runImport(db, photosRoot, snapshots, job, childIds, childName, mode).catch((err) =>
+    void this.runImport(db, photosRoot, snapshots, job, childIds, childName, mode, fixDates).catch((err) =>
       this.fail(job, err),
     );
     return job;
+  }
+
+  /**
+   * When re-importing the original files, correct a photo already in the
+   * library whose date was only a guess (source 'file') if the source file
+   * yields a better date (EXIF/container/filename). Matches the existing
+   * photo by content hash, since that's how it was deduped. Never touches a
+   * manually set date, and never renames the file on disk.
+   */
+  private async tryFixExisting(db: DB, file: string): Promise<boolean> {
+    const hash = await sha256File(file);
+    const row = db.prepare('SELECT id, takenAt, takenAtSource FROM photos WHERE contentHash = ?').get(hash) as
+      | { id: string; takenAt: string; takenAtSource: string }
+      | undefined;
+    if (!row || (DATE_SOURCE_RANK[row.takenAtSource] ?? 0) > 1) return false; // new file, or not a pure guess
+    const resolved = await resolveCaptureDate(file, mimeForFile(file) ?? '', path.basename(file), fs.statSync(file).mtimeMs);
+    if ((DATE_SOURCE_RANK[resolved.source] ?? 0) <= 1 || resolved.takenAt === row.takenAt) return false;
+    db.prepare('UPDATE photos SET takenAt = ?, takenAtSource = ? WHERE id = ?').run(resolved.takenAt, resolved.source, row.id);
+    return true;
   }
 
   private fail(job: ImportJob, err: unknown): void {
@@ -98,7 +124,7 @@ export class ImportJobs {
         const inLibrary = db.prepare('SELECT 1 FROM photos WHERE contentHash = ?').get(hash);
         if (inLibrary || seenHashes.has(hash)) job.duplicates++;
         seenHashes.add(hash);
-        const { takenAt } = await resolveTakenAt(file);
+        const { takenAt } = await resolveCaptureDate(file, mimeForFile(file) ?? '', path.basename(file));
         if (!job.earliest || takenAt < job.earliest) job.earliest = takenAt;
         if (!job.latest || takenAt > job.latest) job.latest = takenAt;
       } catch (err) {
@@ -119,12 +145,16 @@ export class ImportJobs {
     childIds: string[],
     childName: string,
     mode: 'copy' | 'move',
+    fixDates: boolean,
   ): Promise<void> {
     const files = walkImages(job.sourcePath);
     job.total = files.length;
     for (const file of files) {
       try {
         const mtimeMs = fs.statSync(file).mtimeMs;
+        // fixDates re-reads the source before ingest may move/delete it
+        const fixed = fixDates ? await this.tryFixExisting(db, file) : false;
+        if (fixed) job.datesFixed++;
         const result = await ingestFile(db, photosRoot, {
           sourcePath: file,
           originalName: path.basename(file),

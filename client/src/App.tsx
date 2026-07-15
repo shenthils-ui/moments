@@ -7,6 +7,7 @@ import Calendar from './pages/Calendar';
 import Folders from './pages/Folders';
 import Login from './pages/Login';
 import Milestones from './pages/Milestones';
+import More from './pages/More';
 import Settings from './pages/Settings';
 import Timeline from './pages/Timeline';
 import Trash from './pages/Trash';
@@ -60,7 +61,7 @@ export default function App() {
           {NAV.map((item) => (
             <NavLink
               key={item.to}
-              to={item.to === '/more' ? '/settings' : item.to}
+              to={item.to}
               end={item.to === '/'}
               className={({ isActive }) =>
                 `flex flex-col items-center gap-0.5 px-3 py-2 text-[11px] font-medium md:flex-row md:gap-3 md:rounded-lg md:px-3 md:text-sm ${
@@ -84,6 +85,7 @@ export default function App() {
           <Route path="/folders" element={<Folders />} />
           <Route path="/import" element={<BulkImport />} />
           <Route path="/backup" element={<Backup />} />
+          <Route path="/more" element={<More />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/trash" element={<Trash />} />
           <Route path="*" element={<Navigate to="/" replace />} />

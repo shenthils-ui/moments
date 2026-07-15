@@ -56,6 +56,7 @@ export async function ingestFile(db: DB, photosRoot: string, opts: IngestOptions
   const { takenAt, source, width, height, durationSec } = await probeMedia(
     opts.sourcePath,
     mimeType,
+    opts.originalName,
     opts.fallbackMtimeMs,
   );
   const sizeBytes = fs.statSync(opts.sourcePath).size;

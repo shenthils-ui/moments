@@ -136,6 +136,11 @@ export function Lightbox({ photos, index, onClose, onNavigate, onChange, onDelet
                 );
               })}
             </p>
+            {photo.takenAtSource === 'file' && (
+              <p className="text-xs text-amber-400" data-testid="guessed-date">
+                ⚠ Date guessed from the file — this photo had no date info. Tap <strong>Edit</strong> to correct it.
+              </p>
+            )}
             {photo.milestone && <p className="text-amber-300">★ {photo.milestone}</p>}
             {photo.tags.length > 0 && <p className="text-slate-400">{photo.tags.map((t) => `#${t}`).join(' ')}</p>}
             <p className="break-all font-mono text-xs text-slate-500" data-testid="photo-path">

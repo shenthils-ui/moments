@@ -55,6 +55,22 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / 2 ** (10 * i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+/** End of a "YYYY-MM" month, as an ISO instant — used as a jump anchor. */
+export function endOfMonthIso(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(y, m, 0, 23, 59, 59, 999).toISOString();
+}
+
+/** End of a "YYYY-MM-DD" day, as an ISO instant. */
+export function endOfDayIso(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
+}
+
+export const MONTH_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
 /** ISO datetime -> value usable in <input type="datetime-local"> (local time). */
 export function toLocalInput(iso: string): string {
   const d = new Date(iso);

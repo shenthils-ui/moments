@@ -2,6 +2,37 @@
 
 All notable changes to Moments are recorded here. Dates are ISO (YYYY-MM-DD).
 
+## [1.2.0] — 2026-07-15
+
+### Added — timeline navigation, smarter dates, video filter
+
+- **Filename date recovery.** When a photo/video has no embedded date (common
+  for screenshots and files pasted/copied off a phone, whose file time is the
+  copy time), the capture date is now recovered from the filename — the usual
+  camera/app conventions (`IMG_20230514_130502`, `PXL_…`, WhatsApp
+  `IMG-20230514-WA…`, `Screenshot_…`, `2023-05-14 13.05.02`, etc.). Resolution
+  order is embedded metadata → filename → file time. This stops undated files
+  piling up in the current month.
+- **Fix already-imported dates.** Bulk import gains a "Fix dates of photos
+  already imported" option: re-run it on your original folder and any photo
+  whose date was only a guess is corrected from the file's real date/filename —
+  no duplicates created, no files renamed.
+- **"Date guessed" indicator** in the lightbox for photos whose date is only a
+  file-time guess, so they're easy to find and fix.
+- **Date-jump navigator.** A "Jump to date" dropdown on the timeline lists
+  years → months → days (with counts); click to jump straight there. Backed by
+  a new `/api/photos/histogram` endpoint; respects the active filters.
+- **Photo / video filter.** All / Photos / Videos toggle on the timeline
+  (`?kind=` on the photos API), so videos are easy to find.
+- **Real "More" menu.** The bottom-nav "More" now opens a menu of the secondary
+  screens (Milestones, Folders, Bulk import, Backup, Trash, Settings) instead
+  of jumping straight to Settings.
+- Duplicate handling unchanged and confirmed: exact (byte-identical)
+  duplicates are detected by content hash and skipped on upload and import,
+  and reported in the results — regardless of filename or date.
+- Tests: new API coverage (filename dates, histogram, the `to` anchor, the
+  fix-dates re-import) and e2e (date-jump, video filter, More menu).
+
 ## [1.1.0] — 2026-07-15
 
 ### Added — videos and GIFs

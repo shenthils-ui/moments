@@ -65,8 +65,36 @@ By default `data/photos` next to the app. To use another disk, set the
    (the export stays untouched), and press **Import**. Progress is shown
    per file; duplicates (identical bytes) are skipped automatically.
 
-Dates come from EXIF when present, otherwise from the file's modified time,
-and can be fixed per photo later.
+Dates come from the photo's embedded EXIF (or a video's container metadata)
+when present; otherwise Moments reads the date from the **filename** — the
+usual `IMG_20230514_130502`, `PXL_…`, WhatsApp `IMG-20230514-WA…`,
+`Screenshot_…`, `2023-05-14 13.05.02` and similar patterns — and only falls
+back to the file's modified time as a last resort. Any date can also be
+edited per photo.
+
+**Fixing photos that landed in the wrong month.** Files with no date info at
+all (e.g. some screenshots, or images pasted/copied so their file time became
+"today") get a best-effort guess and are flagged "Date guessed" in the
+viewer. To repair a batch of them, re-run **Bulk import** on the original
+folder with **"Fix dates of photos already imported"** ticked: each photo
+already in the library has its guessed date corrected from the real
+date/filename. Nothing is duplicated and no files are renamed.
+
+### Finding your way around the timeline
+
+- **Jump to date:** the "Jump to date" dropdown (top-right of the timeline)
+  lists every year → month → day that has photos, with counts — click to jump
+  straight there instead of scrolling.
+- **Photos / Videos filter:** toggle All / Photos / Videos to narrow the view.
+- Videos show a ▶ badge and their duration on the tile.
+
+### Duplicates
+
+Exact (byte-for-byte identical) photos and videos are detected automatically
+by content hash and skipped on both upload and bulk import — the results tell
+you how many were skipped. This works no matter what the files are named or
+what dates they carry, so pasting or re-importing the same files never
+creates duplicates.
 
 ## The family password
 

@@ -184,7 +184,7 @@ test('bulk import: dry-run preview, then import with progress', async ({ page })
   await expect(scan).toContainText('Mar 3, 2021');
   await expect(scan).toContainText('May 20, 2023');
 
-  await page.getByRole('button', { name: 'Import 2 photos' }).click();
+  await page.getByRole('button', { name: 'Import 2 files' }).click();
   const result = page.getByTestId('import-result');
   await expect(result).toBeVisible({ timeout: 15000 });
   await expect(result).toContainText('2 imported, 1 duplicates skipped');

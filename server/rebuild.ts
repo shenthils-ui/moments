@@ -59,7 +59,7 @@ export async function rebuildIndex(db: DB, photosRoot: string): Promise<RebuildR
       }
 
       const mimeType = mimeForFile(base)!;
-      const probe = await probeMedia(file, mimeType);
+      const probe = await probeMedia(file, mimeType, base);
       let takenAt: string;
       let takenAtSource: Photo['takenAtSource'];
       if (match) {

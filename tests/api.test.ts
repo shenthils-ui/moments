@@ -79,6 +79,67 @@ describe('upload pipeline', () => {
   });
 });
 
+describe('date resolution', () => {
+  it('recovers a capture date from the filename when EXIF is absent (the pasted-file case)', async () => {
+    // no EXIF, and mtime is "now" — as if the file were pasted/copied today
+    const file = path.join(env.root, 'src', 'IMG_20230514_130502.jpg');
+    await makeJpeg(file); // no exif date
+    const now = Date.now();
+    const res = await agent
+      .post('/api/upload')
+      .field('childIds', JSON.stringify([childId]))
+      .field('lastModified', JSON.stringify({ 'IMG_20230514_130502.jpg': now }))
+      .attach('files', file)
+      .expect(200);
+    const photo = res.body.results[0].photo;
+    expect(photo.takenAtSource).toBe('filename');
+    expect(photo.takenAt.startsWith('2023-05-14')).toBe(true);
+    expect(photo.relPath).toContain('/2023/2023-05/');
+  });
+
+  it('marks a photo with no date info as guessed (source file)', async () => {
+    const file = path.join(env.root, 'src', 'nodate.png');
+    await makeJpeg(file); // png-less but fine; no exif, name has no date
+    const res = await agent.post('/api/upload').field('childIds', JSON.stringify([childId])).attach('files', file).expect(200);
+    expect(res.body.results[0].photo.takenAtSource).toBe('file');
+  });
+});
+
+describe('date-jump histogram and anchor', () => {
+  it('reports per-month counts grouped by year and honours the kind filter', async () => {
+    for (const [name, date] of [
+      ['a.jpg', '2023:05:01 10:00:00'],
+      ['b.jpg', '2023:05:20 10:00:00'],
+      ['c.jpg', '2024:02:10 10:00:00'],
+    ] as const) {
+      const f = path.join(env.root, 'src', name);
+      await makeJpeg(f, date);
+      await agent.post('/api/upload').field('childIds', JSON.stringify([childId])).attach('files', f).expect(200);
+    }
+    const hist = await agent.get('/api/photos/histogram').expect(200);
+    expect(hist.body.total).toBe(3);
+    const y2023 = hist.body.years.find((y: any) => y.year === '2023');
+    expect(y2023.count).toBe(2);
+    expect(y2023.months.find((m: any) => m.key === '2023-05').count).toBe(2);
+    // /photos/histogram must not be captured by /photos/:id
+    expect(hist.body.years.map((y: any) => y.year)).toEqual(['2024', '2023']);
+  });
+
+  it('the "to" anchor returns only media at or before that instant', async () => {
+    for (const [name, date] of [
+      ['old.jpg', '2022:01:01 10:00:00'],
+      ['new.jpg', '2024:01:01 10:00:00'],
+    ] as const) {
+      const f = path.join(env.root, 'src', name);
+      await makeJpeg(f, date);
+      await agent.post('/api/upload').field('childIds', JSON.stringify([childId])).attach('files', f).expect(200);
+    }
+    const res = await agent.get('/api/photos?to=2022-12-31T23:59:59.999Z').expect(200);
+    expect(res.body.total).toBe(1);
+    expect(res.body.photos[0].takenAt.startsWith('2022-01-01')).toBe(true);
+  });
+});
+
 describe('photo metadata', () => {
   it('updates caption, tags, milestone and manual date', async () => {
     const file = path.join(env.root, 'src', 'meta.jpg');
@@ -173,6 +234,45 @@ describe('bulk import', () => {
 
     const list = await agent.get('/api/photos').expect(200);
     expect(list.body.total).toBe(2);
+  });
+
+  it('re-import with fixDates corrects a guessed date without adding a duplicate', async () => {
+    // 1) upload with no date info -> guessed (source 'file'), wrong month
+    const upFile = path.join(env.root, 'src', 'IMG_20210704_120000.jpg');
+    await makeJpeg(upFile);
+    const guessed = new Date('2026-04-01T00:00:00Z').getTime();
+    const up = await agent
+      .post('/api/upload')
+      .field('childIds', JSON.stringify([childId]))
+      .field('lastModified', JSON.stringify({ [path.basename(upFile)]: guessed }))
+      .attach('files', upFile)
+      .expect(200);
+    // uploaded via multipart under the browser filename, so date came from the
+    // filename here; force a pure guess to model the real bug:
+    const id = up.body.results[0].photo.id;
+    env.ctx.db.prepare("UPDATE photos SET takenAt = ?, takenAtSource = 'file' WHERE id = ?").run(
+      new Date(guessed).toISOString(),
+      id,
+    );
+    expect((await agent.get(`/api/photos/${id}`).expect(200)).body.takenAt.startsWith('2026-04')).toBe(true);
+
+    // 2) re-import the ORIGINAL folder (filename carries the true date) with fixDates
+    const source = path.join(env.root, 'reimport');
+    fs.mkdirSync(source, { recursive: true });
+    fs.copyFileSync(upFile, path.join(source, 'IMG_20210704_120000.jpg'));
+    const run = await agent
+      .post('/api/import/run')
+      .send({ sourcePath: source, childIds: [childId], mode: 'copy', fixDates: true })
+      .expect(200);
+    const result = await waitForJob(run.body.id);
+    expect(result.datesFixed).toBe(1);
+    expect(result.duplicates).toBe(1);
+    expect(result.added).toBe(0); // no duplicate created
+
+    const fixed = await agent.get(`/api/photos/${id}`).expect(200);
+    expect(fixed.body.takenAt.startsWith('2021-07-04')).toBe(true);
+    expect(fixed.body.takenAtSource).toBe('filename');
+    expect((await agent.get('/api/photos').expect(200)).body.total).toBe(1);
   });
 });
 

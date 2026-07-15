@@ -1,4 +1,4 @@
-export type TakenAtSource = 'exif' | 'container' | 'file' | 'manual';
+export type TakenAtSource = 'exif' | 'container' | 'filename' | 'file' | 'manual';
 export type PhotoStatus = 'active' | 'trashed';
 export type MediaKind = 'photo' | 'video';
 

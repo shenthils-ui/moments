@@ -47,21 +47,77 @@ export interface TakenAtResult {
   source: TakenAtSource;
 }
 
-/**
- * EXIF DateTimeOriginal first; fall back to the provided mtime (the source
- * file's mtime for bulk imports, the browser-reported lastModified for
- * uploads, or the temp file's mtime as a last resort).
- */
-export async function resolveTakenAt(filePath: string, fallbackMtimeMs?: number): Promise<TakenAtResult> {
+/** Read only the embedded EXIF capture date; null when absent/unreadable. */
+async function exifDate(filePath: string): Promise<Date | null> {
   try {
     const exif = await exifr.parse(filePath, { pick: ['DateTimeOriginal', 'CreateDate'] });
     const date: Date | undefined = exif?.DateTimeOriginal ?? exif?.CreateDate;
-    if (date instanceof Date && !Number.isNaN(date.getTime())) {
-      return { takenAt: date.toISOString(), source: 'exif' };
-    }
+    if (date instanceof Date && !Number.isNaN(date.getTime())) return date;
   } catch {
-    // unreadable/absent EXIF is normal; fall through to mtime
+    // unreadable/absent EXIF is normal
   }
+  return null;
+}
+
+/**
+ * Recover a capture date embedded in a filename — the common case for
+ * screenshots and photos pasted/copied off a phone, whose file time has been
+ * reset to the copy time. Handles the widespread camera/app conventions:
+ *   IMG_20230514_130502, PXL_20230514_130502123, VID_20230514_...,
+ *   Screenshot_20230514-130502, IMG-20230514-WA0001 (WhatsApp),
+ *   2023-05-14 13.05.02, 2023_05_14, 20230514_130502, 20230514.
+ * Interpreted in the server's local time. Returns null if no plausible date
+ * is present (and never mistakes a resolution like 1920x1080 for a date).
+ */
+const NAME_DATE_RE =
+  /(?:^|[^\d])(20\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?(0[1-9]|[12]\d|3[01])(?:[-_ T]?([01]\d|2[0-3])[-_.:]?([0-5]\d)(?:[-_.:]?([0-5]\d))?)?/;
+
+export function parseDateFromName(name: string): Date | null {
+  const m = name.match(NAME_DATE_RE);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s] = m;
+  const date = new Date(Number(y), Number(mo) - 1, Number(d), Number(h ?? 0), Number(mi ?? 0), Number(s ?? 0));
+  // reject impossible dates and anything in the future (a bad parse)
+  if (Number.isNaN(date.getTime()) || date.getTime() > Date.now() + 24 * 3600 * 1000) return null;
+  if (date.getFullYear() < 1990) return null;
+  return date;
+}
+
+/**
+ * Resolve a capture date in priority order: embedded metadata (EXIF for
+ * images, container creation_time for video) → a date parsed from the
+ * original filename → the file's modified time as a last resort.
+ */
+export async function resolveCaptureDate(
+  filePath: string,
+  mimeType: string,
+  originalName: string,
+  fallbackMtimeMs?: number,
+): Promise<TakenAtResult> {
+  let embedded: Date | null = null;
+  if (isVideoMime(mimeType)) {
+    try {
+      const { probeVideo } = await import('./media.js');
+      const probe = await probeVideo(filePath);
+      embedded = probe.createdAt ? new Date(probe.createdAt) : null;
+    } catch {
+      /* no ffprobe */
+    }
+    if (embedded) return { takenAt: embedded.toISOString(), source: 'container' };
+  } else {
+    embedded = await exifDate(filePath);
+    if (embedded) return { takenAt: embedded.toISOString(), source: 'exif' };
+  }
+  const fromName = parseDateFromName(originalName);
+  if (fromName) return { takenAt: fromName.toISOString(), source: 'filename' };
+  const mtimeMs = fallbackMtimeMs ?? fs.statSync(filePath).mtimeMs;
+  return { takenAt: new Date(mtimeMs).toISOString(), source: 'file' };
+}
+
+/** Back-compat: EXIF then file time (used where no original name is known). */
+export async function resolveTakenAt(filePath: string, fallbackMtimeMs?: number): Promise<TakenAtResult> {
+  const date = await exifDate(filePath);
+  if (date) return { takenAt: date.toISOString(), source: 'exif' };
   const mtimeMs = fallbackMtimeMs ?? fs.statSync(filePath).mtimeMs;
   return { takenAt: new Date(mtimeMs).toISOString(), source: 'file' };
 }
@@ -76,35 +132,34 @@ export interface MediaProbe {
 
 /**
  * Single entry point for reading a file's date, dimensions and (for video)
- * duration. Images go through EXIF/sharp; video through ffprobe. Any failure
- * degrades to sensible defaults so ingest never blocks on a quirky file.
+ * duration. Date resolution is EXIF/container → filename → file time (see
+ * resolveCaptureDate). Any failure degrades to sensible defaults so ingest
+ * never blocks on a quirky file.
  */
 export async function probeMedia(
   filePath: string,
   mimeType: string,
+  originalName: string,
   fallbackMtimeMs?: number,
 ): Promise<MediaProbe> {
   if (isVideoMime(mimeType)) {
-    const { probeVideo } = await import('./media.js');
     let width = 0;
     let height = 0;
     let durationSec: number | null = null;
-    let containerDate: string | null = null;
     try {
+      const { probeVideo } = await import('./media.js');
       const probe = await probeVideo(filePath);
       width = probe.width;
       height = probe.height;
       durationSec = probe.durationSec;
-      containerDate = probe.createdAt;
     } catch {
-      // no ffprobe / unreadable container: keep defaults, fall back to mtime
+      // no ffprobe / unreadable container: keep defaults
     }
-    if (containerDate) return { takenAt: containerDate, source: 'container', width, height, durationSec };
-    const mtimeMs = fallbackMtimeMs ?? fs.statSync(filePath).mtimeMs;
-    return { takenAt: new Date(mtimeMs).toISOString(), source: 'file', width, height, durationSec };
+    const { takenAt, source } = await resolveCaptureDate(filePath, mimeType, originalName, fallbackMtimeMs);
+    return { takenAt, source, width, height, durationSec };
   }
   const [{ takenAt, source }, { width, height }] = await Promise.all([
-    resolveTakenAt(filePath, fallbackMtimeMs),
+    resolveCaptureDate(filePath, mimeType, originalName, fallbackMtimeMs),
     imageDimensions(filePath),
   ]);
   return { takenAt, source, width, height, durationSec: null };

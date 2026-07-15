@@ -306,6 +306,42 @@ export function createApp(config: AppConfig): AppContext {
     res.json({ total, page, pageSize, photos: rows.map((r) => rowToPhoto(db, r)) });
   });
 
+  // Month-level counts across the whole library, grouped into years — powers
+  // the timeline's date-jump navigator. Honours the child/kind filters so the
+  // navigator matches what's on screen. Registered before /photos/:id so the
+  // literal path isn't captured as an id.
+  api.get('/photos/histogram', (req, res) => {
+    const where: string[] = ["p.status = 'active'"];
+    const params: Record<string, unknown> = {};
+    if (req.query.child) {
+      where.push('p.id IN (SELECT photoId FROM photo_children WHERE childId = @child)');
+      params.child = String(req.query.child);
+    }
+    if (req.query.kind === 'video') where.push("p.mimeType LIKE 'video/%'");
+    else if (req.query.kind === 'photo') where.push("p.mimeType NOT LIKE 'video/%'");
+    const rows = db
+      .prepare(
+        `SELECT substr(p.takenAt, 1, 7) AS ym, COUNT(*) AS count
+         FROM photos p WHERE ${where.join(' AND ')}
+         GROUP BY ym ORDER BY ym DESC`,
+      )
+      .all(params) as { ym: string; count: number }[];
+    const years = new Map<
+      string,
+      { year: string; count: number; months: { key: string; month: number; count: number }[] }
+    >();
+    let total = 0;
+    for (const row of rows) {
+      const year = row.ym.slice(0, 4);
+      total += row.count;
+      if (!years.has(year)) years.set(year, { year, count: 0, months: [] });
+      const entry = years.get(year)!;
+      entry.count += row.count;
+      entry.months.push({ key: row.ym, month: Number(row.ym.slice(5, 7)), count: row.count });
+    }
+    res.json({ total, years: [...years.values()] });
+  });
+
   api.get('/photos/:id', (req, res) => {
     const photo = getPhoto(db, req.params.id);
     if (!photo) return res.status(404).json({ error: 'photo not found' });
@@ -541,7 +577,10 @@ export function createApp(config: AppConfig): AppContext {
     const childIds = validChildIds(req.body?.childIds);
     if (!childIds) return res.status(400).json({ error: 'at least one valid childId is required' });
     const folderChild = childById(childIds[0])!;
-    res.json(importJobs.startImport(db, config.photosRoot, snapshots, sourcePath, childIds, folderChild.name, mode));
+    const fixDates = Boolean(req.body?.fixDates);
+    res.json(
+      importJobs.startImport(db, config.photosRoot, snapshots, sourcePath, childIds, folderChild.name, mode, fixDates),
+    );
   });
 
   api.get('/import/jobs/:id', (req, res) => {
