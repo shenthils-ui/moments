@@ -7,7 +7,6 @@ import Calendar from './pages/Calendar';
 import Folders from './pages/Folders';
 import Login from './pages/Login';
 import Milestones from './pages/Milestones';
-import More from './pages/More';
 import Settings from './pages/Settings';
 import Timeline from './pages/Timeline';
 import Trash from './pages/Trash';
@@ -20,7 +19,7 @@ const NAV = [
   { to: '/calendar', label: 'Calendar', icon: '📅' },
   { to: '/upload', label: 'Upload', icon: '⬆️' },
   { to: '/milestones', label: 'Milestones', icon: '⭐' },
-  { to: '/more', label: 'More', icon: '⋯' },
+  { to: '/settings', label: 'Settings', icon: '⚙️' },
 ];
 
 export default function App() {
@@ -85,7 +84,6 @@ export default function App() {
           <Route path="/folders" element={<Folders />} />
           <Route path="/import" element={<BulkImport />} />
           <Route path="/backup" element={<Backup />} />
-          <Route path="/more" element={<More />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/trash" element={<Trash />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -2,6 +2,32 @@
 
 All notable changes to Moments are recorded here. Dates are ISO (YYYY-MM-DD).
 
+## [1.3.0] — 2026-07-16
+
+### Fixed
+
+- **`start.bat` now rebuilds after an update.** It previously built only on the
+  very first run, so `git pull` left you running the old `dist/` and none of the
+  new features appeared. It now rebuilds whenever the code has changed (tracked
+  by git commit, with a safe fallback), so pulling and relaunching always runs
+  the latest version.
+
+### Changed
+
+- **Bottom-nav "More" is now "Settings"** and opens the Settings page directly
+  (which already links out to Folders, Bulk import, Backup, and Trash). The
+  separate "More" menu page was removed.
+
+### Added
+
+- **Duplicate-on-upload prompt with Replace.** When you upload a file already in
+  the library, it's flagged "already added" (with the date it was first added)
+  instead of silently skipped, and you can choose **Replace** per file or
+  "Replace all". Because the bytes are identical, Replace never stores a second
+  copy — it merges this upload's child assignment, caption and tags into the
+  existing photo and restores it if it was in the trash. Backed by an
+  `onDuplicate` option on the upload API.
+
 ## [1.2.0] — 2026-07-15
 
 ### Added — timeline navigation, smarter dates, video filter

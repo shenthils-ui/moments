@@ -81,7 +81,9 @@ test('uploading two EXIF-dated JPEGs plus one exact duplicate yields two photos 
   await expect(page.getByTestId('upload-item')).toHaveCount(3);
   await page.getByRole('button', { name: 'Upload 3 files' }).click();
   await expect(page.getByText('✓ added')).toHaveCount(2);
-  await expect(page.getByText('≡ duplicate')).toHaveCount(1);
+  // the exact duplicate is flagged "already added" with a Replace action
+  await expect(page.getByText('already added')).toHaveCount(1);
+  await expect(page.getByTestId('replace-duplicate')).toHaveCount(1);
 });
 
 test('timeline groups by month with computed ages, including a pregnancy label', async ({ page }) => {

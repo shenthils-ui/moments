@@ -530,7 +530,21 @@ export function createApp(config: AppConfig): AppContext {
     }
     if (files.length === 0) return res.status(400).json({ error: 'no files' });
     const caption = String(req.body.caption ?? '');
+    // How to handle a file already in the library: 'skip' (default, report it)
+    // or 'replace' (merge this upload's children/caption/tags into the
+    // existing entry, and restore it if it was in the trash). The bytes are
+    // identical by definition, so no second copy is ever stored.
+    const onDuplicate = req.body.onDuplicate === 'replace' ? 'replace' : 'skip';
     const folderChild = childById(childIds[0])!;
+
+    const summarize = (photo: Photo) => ({
+      id: photo.id,
+      takenAt: photo.takenAt,
+      caption: photo.caption,
+      relPath: photo.relPath,
+      status: photo.status,
+      childIds: photo.childIds,
+    });
 
     const results = [];
     for (const file of files) {
@@ -549,7 +563,28 @@ export function createApp(config: AppConfig): AppContext {
       if (result.outcome === 'added') {
         results.push({ name: originalName, outcome: 'added', photo: result.photo });
       } else if (result.outcome === 'duplicate') {
-        results.push({ name: originalName, outcome: 'duplicate', existingId: result.existingId });
+        const existing = getPhoto(db, result.existingId);
+        if (existing && onDuplicate === 'replace') {
+          if (existing.status === 'trashed') {
+            const child = childById(existing.childIds[0] ?? '');
+            restorePhoto(db, config.photosRoot, existing, child?.name ?? folderChild.name);
+          }
+          const mergedChildren = [...new Set([...existing.childIds, ...childIds])];
+          setPhotoChildren(db, existing.id, mergedChildren);
+          db.prepare('UPDATE photos SET caption = ?, tags = ? WHERE id = ?').run(
+            caption || existing.caption,
+            JSON.stringify(tags.length ? [...new Set([...existing.tags, ...tags])] : existing.tags),
+            existing.id,
+          );
+          results.push({ name: originalName, outcome: 'replaced', photo: getPhoto(db, existing.id) });
+        } else {
+          results.push({
+            name: originalName,
+            outcome: 'duplicate',
+            existingId: result.existingId,
+            existing: existing ? summarize(existing) : null,
+          });
+        }
       } else {
         results.push({ name: originalName, outcome: 'error', reason: result.reason });
       }

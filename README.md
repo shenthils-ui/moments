@@ -91,10 +91,15 @@ date/filename. Nothing is duplicated and no files are renamed.
 ### Duplicates
 
 Exact (byte-for-byte identical) photos and videos are detected automatically
-by content hash and skipped on both upload and bulk import — the results tell
-you how many were skipped. This works no matter what the files are named or
-what dates they carry, so pasting or re-importing the same files never
-creates duplicates.
+by content hash — this works no matter what the files are named or what dates
+they carry, so re-importing the same files never creates duplicates.
+
+- **On upload**, a file already in the library is flagged **"already added"**
+  (showing when it was first added). It won't be duplicated; you can choose
+  **Replace** on it (or "Replace all") to update the existing photo's child
+  assignment, caption and tags from this upload — and restore it if it was in
+  the trash. The photo itself is unchanged, since the bytes are identical.
+- **On bulk import**, duplicates are skipped and counted in the results.
 
 ## The family password
 

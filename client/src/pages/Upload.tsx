@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAppState } from '../state';
 import { Button, Card, EmptyState, Field, inputCls } from '../components/ui';
+import { formatDate } from '../util';
 
-type FileState = 'queued' | 'uploading' | 'added' | 'duplicate' | 'error';
+type FileState = 'queued' | 'uploading' | 'added' | 'duplicate' | 'replaced' | 'error';
 
 interface QueuedFile {
   file: File;
@@ -10,6 +11,7 @@ interface QueuedFile {
   state: FileState;
   progress: number;
   reason?: string;
+  existing?: { takenAt: string; caption: string } | null;
 }
 
 export default function Upload() {
@@ -41,13 +43,14 @@ export default function Upload() {
     setQueue((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
 
   /** One request per file so each gets its own progress bar and retry. */
-  const uploadOne = (index: number, item: QueuedFile) =>
+  const uploadOne = (index: number, item: QueuedFile, onDuplicate: 'skip' | 'replace' = 'skip') =>
     new Promise<void>((resolve) => {
       const form = new FormData();
       form.append('childIds', JSON.stringify(selected));
       form.append('caption', caption);
       form.append('tags', JSON.stringify(tags.split(',').map((t) => t.trim()).filter(Boolean)));
       form.append('lastModified', JSON.stringify({ [item.file.name]: item.file.lastModified }));
+      form.append('onDuplicate', onDuplicate);
       form.append('files', item.file);
 
       const xhr = new XMLHttpRequest();
@@ -64,7 +67,8 @@ export default function Upload() {
             const result = body.results[0];
             setItem(index, {
               state: result.outcome,
-              reason: result.outcome === 'duplicate' ? 'already in the library' : result.reason,
+              reason: result.reason,
+              existing: result.existing ?? null,
             });
           }
         } catch {
@@ -91,8 +95,17 @@ export default function Upload() {
   };
 
   const retry = (index: number) => void uploadOne(index, queue[index]);
+  const replace = (index: number) => void uploadOne(index, queue[index], 'replace');
+  const replaceAll = async () => {
+    setBusy(true);
+    for (let i = 0; i < queue.length; i++) {
+      if (queue[i].state === 'duplicate') await uploadOne(i, queue[i], 'replace');
+    }
+    setBusy(false);
+  };
 
   const pending = queue.filter((q) => q.state === 'queued' || q.state === 'error').length;
+  const duplicates = queue.filter((q) => q.state === 'duplicate').length;
 
   return (
     <div className="space-y-4">
@@ -164,6 +177,11 @@ export default function Upload() {
                 ) : (
                   <img src={item.preview} alt={item.file.name} className="aspect-square w-full bg-slate-800 object-cover" />
                 )}
+                {item.state === 'duplicate' && (
+                  <span className="absolute right-1 top-1 rounded bg-amber-500/90 px-1 py-0.5 text-[9px] font-semibold text-black">
+                    already added
+                  </span>
+                )}
                 <div className="absolute inset-x-0 bottom-0 bg-black/70 p-1 text-center text-[10px]">
                   {item.state === 'queued' && <span className="text-slate-300">ready</span>}
                   {item.state === 'uploading' && (
@@ -172,7 +190,21 @@ export default function Upload() {
                     </div>
                   )}
                   {item.state === 'added' && <span className="text-emerald-400">✓ added</span>}
-                  {item.state === 'duplicate' && <span className="text-amber-400">≡ duplicate</span>}
+                  {item.state === 'replaced' && <span className="text-emerald-400">✓ replaced</span>}
+                  {item.state === 'duplicate' && (
+                    <button
+                      onClick={() => replace(i)}
+                      className="font-medium text-amber-300 underline"
+                      title={
+                        item.existing
+                          ? `Already in your library (added ${formatDate(item.existing.takenAt)}). Replace updates who's in it, the caption and tags.`
+                          : 'Already in your library'
+                      }
+                      data-testid="replace-duplicate"
+                    >
+                      ↻ replace
+                    </button>
+                  )}
                   {item.state === 'error' && (
                     <button onClick={() => retry(i)} className="text-red-400 underline" title={item.reason}>
                       ✕ retry
@@ -182,6 +214,20 @@ export default function Upload() {
               </div>
             ))}
           </div>
+          {duplicates > 0 && (
+            <div className="rounded-lg border border-amber-800 bg-amber-950/40 p-3 text-sm text-amber-200" data-testid="duplicate-notice">
+              <p>
+                {duplicates} {duplicates === 1 ? 'file is' : 'files are'} already in your library. They won't be added
+                again. Choose <strong>Replace</strong> on one to update its child, caption and tags (and restore it if it
+                was in the trash) — the photo itself is unchanged.
+              </p>
+              <div className="mt-2">
+                <Button small kind="secondary" onClick={() => void replaceAll()} disabled={busy}>
+                  Replace all {duplicates}
+                </Button>
+              </div>
+            </div>
+          )}
           {queue.some((q) => q.state === 'error') && (
             <p className="text-xs text-red-400">
               {queue.filter((q) => q.state === 'error').map((q, i) => `${q.file.name}: ${q.reason}`).join(' · ')}

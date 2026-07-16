@@ -87,9 +87,11 @@ test('the photo/video filter narrows the timeline', async ({ page }) => {
   await expect(page.locator('[data-testid=photo-tile]')).toHaveCount(2);
 });
 
-test('the More menu links to the secondary screens', async ({ page }) => {
-  await page.goto(`${BASE}/#/more`);
-  await expect(page.getByRole('heading', { name: 'More' })).toBeVisible();
-  await page.getByRole('link', { name: /Folders/ }).click();
+test('the Settings nav item opens Settings, which links to the other tools', async ({ page }) => {
+  await page.goto(BASE);
+  await page.getByRole('link', { name: 'Settings' }).first().click();
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  // Settings is the hub: it links out to folders, trash, import, backup
+  await page.getByRole('link', { name: 'Browse folders on disk' }).click();
   await expect(page.getByRole('heading', { name: 'Folders' })).toBeVisible();
 });

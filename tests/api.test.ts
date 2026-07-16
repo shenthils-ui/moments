@@ -68,6 +68,58 @@ describe('upload pipeline', () => {
     expect(list.body.total).toBe(1);
   });
 
+  it('reports a duplicate with the existing photo, and replace merges instead of adding a copy', async () => {
+    const [alice] = [
+      (await agent.post('/api/children').send({ name: 'Alice', birthDate: '2023-01-01' }).expect(201)).body.id,
+    ];
+    const file = path.join(env.root, 'src', 'shared.jpg');
+    await makeJpeg(file, '2023:06:01 10:00:00');
+    // first upload assigns Mila (childId)
+    const first = await agent.post('/api/upload').field('childIds', JSON.stringify([childId])).attach('files', file).expect(200);
+    const photoId = first.body.results[0].photo.id;
+
+    // second upload of the SAME file, default skip: reported as duplicate with details
+    const dup = await agent.post('/api/upload').field('childIds', JSON.stringify([alice])).attach('files', file).expect(200);
+    expect(dup.body.results[0].outcome).toBe('duplicate');
+    expect(dup.body.results[0].existingId).toBe(photoId);
+    expect(dup.body.results[0].existing.takenAt.startsWith('2023-06-01')).toBe(true);
+    // still exactly one photo; Alice not added on a skip
+    expect((await agent.get('/api/photos').expect(200)).body.total).toBe(1);
+    expect((await agent.get(`/api/photos/${photoId}`).expect(200)).body.childIds).toEqual([childId]);
+
+    // now replace: merges Alice into the existing photo, no new copy
+    const rep = await agent
+      .post('/api/upload')
+      .field('childIds', JSON.stringify([alice]))
+      .field('caption', 'shared moment')
+      .field('onDuplicate', 'replace')
+      .attach('files', file)
+      .expect(200);
+    expect(rep.body.results[0].outcome).toBe('replaced');
+    expect((await agent.get('/api/photos').expect(200)).body.total).toBe(1);
+    const merged = (await agent.get(`/api/photos/${photoId}`).expect(200)).body;
+    expect(merged.childIds.sort()).toEqual([childId, alice].sort());
+    expect(merged.caption).toBe('shared moment');
+  });
+
+  it('replace restores a duplicate that was in the trash', async () => {
+    const file = path.join(env.root, 'src', 'revive.jpg');
+    await makeJpeg(file, '2023:07:07 10:00:00');
+    const up = await agent.post('/api/upload').field('childIds', JSON.stringify([childId])).attach('files', file).expect(200);
+    const id = up.body.results[0].photo.id;
+    await agent.delete(`/api/photos/${id}`).expect(200); // to trash
+    expect((await agent.get('/api/trash').expect(200)).body).toHaveLength(1);
+
+    await agent
+      .post('/api/upload')
+      .field('childIds', JSON.stringify([childId]))
+      .field('onDuplicate', 'replace')
+      .attach('files', file)
+      .expect(200);
+    expect((await agent.get('/api/trash').expect(200)).body).toHaveLength(0);
+    expect((await agent.get('/api/photos').expect(200)).body.total).toBe(1);
+  });
+
   it('rejects uploads without a valid child', async () => {
     const file = path.join(env.root, 'src', 'x.jpg');
     await makeJpeg(file);
