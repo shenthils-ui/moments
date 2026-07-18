@@ -49,25 +49,55 @@ export function Thumb({ photo, size = 256, className }: { photo: Photo; size?: 2
   );
 }
 
-export function PhotoGrid({ photos, onOpen }: { photos: Photo[]; onOpen: (index: number) => void }) {
+export function PhotoGrid({
+  photos,
+  onOpen,
+  selectMode = false,
+  selectedIds,
+  onToggleSelect,
+  draggable = false,
+}: {
+  photos: Photo[];
+  onOpen: (index: number) => void;
+  selectMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  draggable?: boolean;
+}) {
   return (
     <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-      {photos.map((photo, i) => (
-        <button
-          key={photo.id}
-          onClick={() => onOpen(i)}
-          className="relative aspect-square overflow-hidden rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400"
-          data-testid="photo-tile"
-        >
-          <Thumb photo={photo} className="absolute inset-0 h-full w-full" />
-          {photo.kind === 'video' && <VideoOverlay photo={photo} />}
-          {photo.milestone && (
-            <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 py-0.5 text-[9px] text-amber-300">
-              ★ {photo.milestone}
-            </span>
-          )}
-        </button>
-      ))}
+      {photos.map((photo, i) => {
+        const selected = selectedIds?.has(photo.id) ?? false;
+        return (
+          <button
+            key={photo.id}
+            onClick={() => (selectMode ? onToggleSelect?.(photo.id) : onOpen(i))}
+            draggable={draggable && !selectMode}
+            onDragStart={(e) => e.dataTransfer.setData('text/plain', photo.id)}
+            className={`relative aspect-square overflow-hidden rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400 ${
+              selected ? 'ring-2 ring-pink-400' : ''
+            }`}
+            data-testid="photo-tile"
+          >
+            <Thumb photo={photo} className="absolute inset-0 h-full w-full" />
+            {photo.kind === 'video' && <VideoOverlay photo={photo} />}
+            {photo.milestone && (
+              <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 py-0.5 text-[9px] text-amber-300">
+                ★ {photo.milestone}
+              </span>
+            )}
+            {selectMode && (
+              <span
+                className={`absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border-2 text-[11px] ${
+                  selected ? 'border-pink-400 bg-pink-500 text-white' : 'border-white/80 bg-black/40 text-transparent'
+                }`}
+              >
+                ✓
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

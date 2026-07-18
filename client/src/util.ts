@@ -71,6 +71,22 @@ export const MONTH_NAMES = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
+/** Move an ISO datetime into "YYYY-MM", keeping day/time (day clamped). */
+export function reMonthIso(iso: string, ym: string): string {
+  const src = new Date(iso);
+  const [y, m] = ym.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const day = Math.min(src.getDate(), lastDay);
+  return new Date(y, m - 1, day, src.getHours(), src.getMinutes(), src.getSeconds()).toISOString();
+}
+
+/** Move an ISO datetime to a specific "YYYY-MM-DD", keeping the time of day. */
+export function reDayIso(iso: string, ymd: string): string {
+  const src = new Date(iso);
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d, src.getHours(), src.getMinutes(), src.getSeconds()).toISOString();
+}
+
 /** ISO datetime -> value usable in <input type="datetime-local"> (local time). */
 export function toLocalInput(iso: string): string {
   const d = new Date(iso);

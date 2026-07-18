@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAppState } from '../state';
 import { Button, Card, EmptyState, Field, inputCls } from '../components/ui';
 import { formatDate } from '../util';
@@ -109,7 +110,19 @@ export default function Upload() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-slate-100">Upload</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-slate-100">Upload</h1>
+        <Link
+          to="/import"
+          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:border-slate-500"
+        >
+          📥 Bulk import from a folder
+        </Link>
+      </div>
+      <p className="text-sm text-slate-400">
+        Adding a handful of files? Use this page. Importing a whole export (hundreds/thousands of files already on the
+        server's disk)? Use <Link to="/import" className="text-pink-400 hover:underline">Bulk import</Link> instead.
+      </p>
 
       <Card title="Who is in these photos?">
         <div className="flex flex-wrap gap-2">

@@ -348,6 +348,46 @@ export function createApp(config: AppConfig): AppContext {
     res.json(photo);
   });
 
+  // Bulk operations on a selection — set a new date (used by drag-to-re-date
+  // and the multi-select "fix dates" flow), reassign children, or trash.
+  // A date edit is metadata only; files are never renamed or moved.
+  api.post('/photos/bulk', (req, res) => {
+    const { ids, takenAt, childIds, trash } = req.body ?? {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids must be a non-empty array' });
+    const photos = ids.map((id: unknown) => getPhoto(db, String(id))).filter((p): p is Photo => p !== null);
+    if (photos.length === 0) return res.status(404).json({ error: 'no matching photos' });
+
+    if (trash) {
+      const run = db.transaction(() => {
+        for (const p of photos) if (p.status === 'active') trashPhoto(db, config.photosRoot, p);
+      });
+      run();
+      snapshots.schedule();
+      return res.json({ ok: true, trashed: photos.length });
+    }
+
+    let newIso: string | null = null;
+    if (takenAt !== undefined) {
+      const d = new Date(String(takenAt));
+      if (Number.isNaN(d.getTime())) return res.status(400).json({ error: 'invalid takenAt' });
+      newIso = d.toISOString();
+    }
+    let ids2: string[] | null = null;
+    if (childIds !== undefined) {
+      ids2 = validChildIds(childIds);
+      if (!ids2) return res.status(400).json({ error: 'childIds must be a non-empty array of existing child ids' });
+    }
+    const run = db.transaction(() => {
+      for (const p of photos) {
+        if (newIso) db.prepare("UPDATE photos SET takenAt = ?, takenAtSource = 'manual' WHERE id = ?").run(newIso, p.id);
+        if (ids2) setPhotoChildren(db, p.id, ids2);
+      }
+    });
+    run();
+    snapshots.schedule();
+    res.json({ ok: true, updated: photos.length });
+  });
+
   api.patch('/photos/:id', (req, res) => {
     const photo = getPhoto(db, req.params.id);
     if (!photo) return res.status(404).json({ error: 'photo not found' });

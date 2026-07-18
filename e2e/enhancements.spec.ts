@@ -54,24 +54,38 @@ test.afterAll(async () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('date-jump navigator jumps the timeline to a chosen month', async ({ page }) => {
+test('the fixed date rail jumps the timeline to a chosen month', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 }); // desktop: rail is visible
   await page.goto(BASE);
-  // newest first: Feb 2024 (or Aug 2024 video) is on top, May 2023 lower
   await expect(page.locator('[data-testid=month-group]').first()).toBeVisible();
 
-  await page.getByTestId('date-jump-button').click();
-  const panel = page.getByTestId('date-jump-panel');
-  await expect(panel).toBeVisible();
-  // expand the 2023 year, then jump to May 2023
-  await panel.getByRole('button', { name: /2023/ }).click();
-  await panel.getByTestId('date-jump-month').filter({ hasText: 'May' }).click();
+  const rail = page.getByTestId('date-rail');
+  await expect(rail).toBeVisible(); // always visible, not a dropdown
+  // expand 2023 in the rail, then jump to May 2023
+  await rail.getByRole('button', { name: /2023/ }).click();
+  await rail.getByTestId('rail-month').filter({ hasText: 'May' }).click();
 
   await expect(page.getByText('jumped to')).toBeVisible();
-  // May 2023 is now the first group shown
   await expect(page.locator('[data-testid=month-group]').first()).toContainText('May 2023');
 
-  await page.getByRole('button', { name: '↑ newest' }).click();
+  await rail.getByRole('button', { name: /Today/ }).click();
   await expect(page.getByText('jumped to')).toHaveCount(0);
+});
+
+test('multi-select sets a new date on several photos at once', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(BASE);
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
+  // select the whole Feb 2024 group and re-date to July 2020
+  const feb = page.locator('[data-testid=month-group]', { hasText: 'February 2024' });
+  await feb.getByRole('button', { name: 'select month' }).click();
+  const bar = page.getByTestId('bulk-bar');
+  await expect(bar).toContainText('1 selected');
+  await bar.locator('input[type=date]').fill('2020-07-15');
+  await bar.getByRole('button', { name: 'Apply' }).click();
+
+  await expect(page.locator('[data-testid=month-group]', { hasText: 'February 2024' })).toHaveCount(0);
+  await expect(page.locator('[data-testid=month-group]', { hasText: 'July 2020' })).toBeVisible();
 });
 
 test('the photo/video filter narrows the timeline', async ({ page }) => {

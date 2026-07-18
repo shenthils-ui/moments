@@ -157,6 +157,49 @@ describe('date resolution', () => {
   });
 });
 
+describe('bulk operations (drag-to-re-date, multi-select)', () => {
+  async function uploadDated(name: string, exif: string) {
+    const f = path.join(env.root, 'src', name);
+    await makeJpeg(f, exif);
+    const res = await agent.post('/api/upload').field('childIds', JSON.stringify([childId])).attach('files', f).expect(200);
+    return res.body.results[0].photo.id as string;
+  }
+
+  it('bulk-sets a new date on several photos (metadata only, marked manual)', async () => {
+    const a = await uploadDated('ba.jpg', '2026:04:01 10:00:00');
+    const b = await uploadDated('bb.jpg', '2026:04:02 10:00:00');
+    const before = await agent.get(`/api/photos/${a}`).expect(200);
+    const relBefore = before.body.relPath;
+
+    await agent
+      .post('/api/photos/bulk')
+      .send({ ids: [a, b], takenAt: '2021-07-04T12:00:00.000Z' })
+      .expect(200);
+
+    for (const id of [a, b]) {
+      const p = (await agent.get(`/api/photos/${id}`).expect(200)).body;
+      expect(p.takenAt).toBe('2021-07-04T12:00:00.000Z');
+      expect(p.takenAtSource).toBe('manual');
+    }
+    // the file on disk is never renamed by a date edit
+    expect((await agent.get(`/api/photos/${a}`).expect(200)).body.relPath).toBe(relBefore);
+  });
+
+  it('bulk-trashes a selection', async () => {
+    const a = await uploadDated('ta.jpg', '2023:01:01 10:00:00');
+    const b = await uploadDated('tb.jpg', '2023:01:02 10:00:00');
+    await agent.post('/api/photos/bulk').send({ ids: [a, b], trash: true }).expect(200);
+    expect((await agent.get('/api/photos').expect(200)).body.total).toBe(0);
+    expect((await agent.get('/api/trash').expect(200)).body).toHaveLength(2);
+  });
+
+  it('rejects an empty or invalid bulk request', async () => {
+    await agent.post('/api/photos/bulk').send({ ids: [] }).expect(400);
+    const a = await uploadDated('bad.jpg', '2023:01:01 10:00:00');
+    await agent.post('/api/photos/bulk').send({ ids: [a], takenAt: 'not-a-date' }).expect(400);
+  });
+});
+
 describe('date-jump histogram and anchor', () => {
   it('reports per-month counts grouped by year and honours the kind filter', async () => {
     for (const [name, date] of [

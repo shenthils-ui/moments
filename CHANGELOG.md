@@ -2,6 +2,26 @@
 
 All notable changes to Moments are recorded here. Dates are ISO (YYYY-MM-DD).
 
+## [1.4.0] — 2026-07-16
+
+### Added — TimeHut-style date rail, re-dating, and bulk fixes
+
+- **Fixed date rail** on the right of the timeline (replaces the dropdown):
+  years → months → days with counts, always visible while scrolling, with the
+  month currently in view highlighted. Click any entry to jump; "Today ↑"
+  returns to newest. On phones it opens from a floating "Dates" button.
+- **Drag a photo onto a rail date to move it there.** Drop on a month keeps the
+  day/time; drop on a day keeps the time. A quick way to place mis-dated
+  photos.
+- **Multi-select + bulk fixes.** A "Select" mode lets you tap photos (or
+  "select month"), then set one date for all of them, or trash them together —
+  ideal for correcting a whole batch of TimeHut-export photos that imported
+  with the download date. Backed by a new `POST /api/photos/bulk` endpoint.
+- **"⚠ N guessed dates" badge** on month headers that contain file-time-only
+  dates, so batches needing correction are obvious.
+- **Bulk import is reachable from the Upload page** (and the timeline empty
+  state), not only when the library is empty.
+
 ## [1.3.0] — 2026-07-16
 
 ### Fixed

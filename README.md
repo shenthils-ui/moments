@@ -82,11 +82,26 @@ date/filename. Nothing is duplicated and no files are renamed.
 
 ### Finding your way around the timeline
 
-- **Jump to date:** the "Jump to date" dropdown (top-right of the timeline)
-  lists every year → month → day that has photos, with counts — click to jump
-  straight there instead of scrolling.
+- **Date rail (right side):** a fixed, always-visible list of years → months →
+  days with counts (like TimeHut's age rail). Click any entry to jump; the
+  month you're viewing is highlighted; "Today ↑" returns to newest. On phones,
+  tap the floating **📅 Dates** button.
 - **Photos / Videos filter:** toggle All / Photos / Videos to narrow the view.
 - Videos show a ▶ badge and their duration on the tile.
+
+### Fixing dates the easy way
+
+Photos that imported with the wrong date (e.g. a TimeHut download, where every
+file got the download date) are easy to correct:
+
+- **Drag a photo onto a date in the rail** to move it to that month (or day).
+- **Select several at once:** tap **Select** (top of the timeline), tap photos
+  or use **"select month"** on a group header, then pick one date in the bar at
+  the bottom and **Apply** — great for fixing a whole batch. You can also delete
+  a selection together.
+- Month headers show a **"⚠ N guessed dates"** badge so batches that need
+  attention stand out.
+- Single photos can still be edited in the viewer (open a photo → Edit).
 
 ### Duplicates
 
