@@ -21,6 +21,9 @@ export default function Timeline() {
   const [loading, setLoading] = useState(true);
   const [child, setChild] = useState<string | null>(null);
   const [kind, setKind] = useState<Kind>('all');
+  const [favOnly, setFavOnly] = useState(false);
+  const [search, setSearch] = useState('');
+  const [q, setQ] = useState('');
   const [anchor, setAnchor] = useState<{ iso: string; label: string } | null>(null);
   const [years, setYears] = useState<HistogramYear[]>([]);
   const [open, setOpen] = useState<number | null>(null);
@@ -34,13 +37,15 @@ export default function Timeline() {
 
   const buildQuery = useCallback(
     (pageNum: number) => {
-      const q = new URLSearchParams({ page: String(pageNum), pageSize: String(PAGE_SIZE) });
-      if (child) q.set('child', child);
-      if (kind !== 'all') q.set('kind', kind);
-      if (anchor) q.set('to', anchor.iso);
-      return q;
+      const params = new URLSearchParams({ page: String(pageNum), pageSize: String(PAGE_SIZE) });
+      if (child) params.set('child', child);
+      if (kind !== 'all') params.set('kind', kind);
+      if (favOnly) params.set('favorite', '1');
+      if (q.trim()) params.set('q', q.trim());
+      if (anchor) params.set('to', anchor.iso);
+      return params;
     },
-    [child, kind, anchor],
+    [child, kind, favOnly, q, anchor],
   );
 
   const load = useCallback(
@@ -58,16 +63,24 @@ export default function Timeline() {
   );
 
   const loadHistogram = useCallback(() => {
-    const q = new URLSearchParams();
-    if (child) q.set('child', child);
-    if (kind !== 'all') q.set('kind', kind);
-    void api<{ years: HistogramYear[] }>(`/api/photos/histogram?${q}`).then((r) => setYears(r.years));
-  }, [child, kind]);
+    const params = new URLSearchParams();
+    if (child) params.set('child', child);
+    if (kind !== 'all') params.set('kind', kind);
+    if (favOnly) params.set('favorite', '1');
+    if (q.trim()) params.set('q', q.trim());
+    void api<{ years: HistogramYear[] }>(`/api/photos/histogram?${params}`).then((r) => setYears(r.years));
+  }, [child, kind, favOnly, q]);
+
+  // debounce the search box into the applied query
+  useEffect(() => {
+    const t = setTimeout(() => setQ(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     setPage(1);
     void load(1);
-  }, [child, kind, anchor, load]);
+  }, [child, kind, favOnly, q, anchor, load]);
 
   useEffect(() => loadHistogram(), [loadHistogram]);
 
@@ -181,6 +194,10 @@ export default function Timeline() {
       setChild={setChild}
       kind={kind}
       setKind={setKind}
+      favOnly={favOnly}
+      setFavOnly={setFavOnly}
+      search={search}
+      setSearch={setSearch}
       anchor={anchor}
       onClearAnchor={() => setAnchor(null)}
       selectMode={selectMode}
@@ -341,6 +358,10 @@ function Header({
   setChild,
   kind,
   setKind,
+  favOnly,
+  setFavOnly,
+  search,
+  setSearch,
   anchor,
   onClearAnchor,
   selectMode,
@@ -350,6 +371,10 @@ function Header({
   setChild: (id: string | null) => void;
   kind: Kind;
   setKind: (k: Kind) => void;
+  favOnly: boolean;
+  setFavOnly: (v: boolean) => void;
+  search: string;
+  setSearch: (v: string) => void;
   anchor: { iso: string; label: string } | null;
   onClearAnchor: () => void;
   selectMode: boolean;
@@ -370,6 +395,20 @@ function Header({
       </div>
       <ChildChips selected={child} onSelect={setChild} />
       <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search captions, tags, milestones…"
+            className="w-56 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:border-pink-400 focus:outline-none"
+            data-testid="search-input"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2 top-1.5 text-slate-500 hover:text-slate-300" aria-label="Clear search">
+              ✕
+            </button>
+          )}
+        </div>
         <div className="flex gap-1 rounded-lg bg-slate-800 p-0.5" data-testid="kind-filter">
           {kinds.map((k) => (
             <button
@@ -383,6 +422,13 @@ function Header({
             </button>
           ))}
         </div>
+        <button
+          onClick={() => setFavOnly(!favOnly)}
+          className={`rounded-lg px-3 py-1.5 text-xs font-medium ${favOnly ? 'bg-pink-500 text-white' : 'bg-slate-800 text-slate-300 hover:text-white'}`}
+          data-testid="fav-toggle"
+        >
+          {favOnly ? '♥ Favorites' : '♡ Favorites'}
+        </button>
         {anchor && (
           <span className="flex items-center gap-1 text-xs text-slate-400">
             jumped to <span className="font-medium text-slate-200">{anchor.label}</span>

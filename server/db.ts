@@ -4,7 +4,7 @@ import type { Child, Photo, TakenAtSource, PhotoStatus, MediaKind } from '../sha
 
 export type DB = Database.Database;
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 const MIGRATIONS: Record<number, (db: DB) => void> = {
   1: (db) => {
@@ -95,6 +95,10 @@ const MIGRATIONS: Record<number, (db: DB) => void> = {
     // derived from mimeType at read time, so no column is needed for it.
     db.exec(`ALTER TABLE photos ADD COLUMN durationSec INTEGER;`);
   },
+  4: (db) => {
+    db.exec(`ALTER TABLE photos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;`);
+    db.exec(`CREATE INDEX idx_photos_favorite ON photos(favorite);`);
+  },
 };
 
 export function openDb(dataDir: string): DB {
@@ -137,6 +141,7 @@ interface PhotoRow {
   caption: string;
   tags: string;
   milestone: string | null;
+  favorite: number;
   status: PhotoStatus;
   trashedAt: string | null;
   createdAt: string;
@@ -156,6 +161,7 @@ export function rowToPhoto(db: DB, row: PhotoRow): Photo {
     childIds,
     kind: mediaKind(row.mimeType),
     durationSec: row.durationSec ?? null,
+    favorite: Boolean(row.favorite),
   };
 }
 
@@ -168,10 +174,15 @@ export function insertPhoto(db: DB, photo: Photo): void {
   const insert = db.transaction(() => {
     db.prepare(
       `INSERT INTO photos (id, contentHash, takenAt, takenAtSource, relPath, filename, mimeType,
-         width, height, durationSec, sizeBytes, caption, tags, milestone, status, trashedAt, createdAt)
+         width, height, durationSec, sizeBytes, caption, tags, milestone, favorite, status, trashedAt, createdAt)
        VALUES (@id, @contentHash, @takenAt, @takenAtSource, @relPath, @filename, @mimeType,
-         @width, @height, @durationSec, @sizeBytes, @caption, @tags, @milestone, @status, @trashedAt, @createdAt)`,
-    ).run({ ...photo, tags: JSON.stringify(photo.tags), durationSec: photo.durationSec ?? null });
+         @width, @height, @durationSec, @sizeBytes, @caption, @tags, @milestone, @favorite, @status, @trashedAt, @createdAt)`,
+    ).run({
+      ...photo,
+      tags: JSON.stringify(photo.tags),
+      durationSec: photo.durationSec ?? null,
+      favorite: photo.favorite ? 1 : 0,
+    });
     const link = db.prepare('INSERT INTO photo_children (photoId, childId) VALUES (?, ?)');
     for (const childId of photo.childIds) link.run(photo.id, childId);
   });

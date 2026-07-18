@@ -53,6 +53,15 @@ export function Lightbox({ photos, index, onClose, onNavigate, onChange, onDelet
           ✕ Close
         </button>
         <div className="flex gap-2">
+          <button
+            onClick={async () => onChange(await api<Photo>(`/api/photos/${photo.id}`, { method: 'PATCH', body: JSON.stringify({ favorite: !photo.favorite }) }))}
+            className={`rounded-lg px-3 py-1.5 text-sm hover:bg-slate-800 ${photo.favorite ? 'text-pink-400' : 'text-slate-300'}`}
+            aria-label={photo.favorite ? 'Remove favorite' : 'Add favorite'}
+            title={photo.favorite ? 'Favorited' : 'Mark as favorite'}
+            data-testid="favorite-toggle"
+          >
+            {photo.favorite ? '♥' : '♡'}
+          </button>
           {!fullRes && !isVideo && !isGif && (
             <Button small kind="secondary" onClick={() => setFullRes(true)}>
               Full resolution

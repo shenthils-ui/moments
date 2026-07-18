@@ -81,6 +81,7 @@ export function PhotoGrid({
           >
             <Thumb photo={photo} className="absolute inset-0 h-full w-full" />
             {photo.kind === 'video' && <VideoOverlay photo={photo} />}
+            {photo.favorite && <span className="absolute left-1 top-1 text-sm text-pink-400 drop-shadow">♥</span>}
             {photo.milestone && (
               <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 py-0.5 text-[9px] text-amber-300">
                 ★ {photo.milestone}

@@ -119,6 +119,7 @@ export function applySnapshot(db: DB, photosRoot: string, snapshot: MetadataSnap
         milestone: photo.milestone ?? null,
         caption: photo.caption ?? '',
         tags: photo.tags ?? [],
+        favorite: photo.favorite ?? false,
       });
       const onDisk =
         photo.status === 'trashed'

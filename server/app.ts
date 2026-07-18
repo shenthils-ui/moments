@@ -256,7 +256,7 @@ export function createApp(config: AppConfig): AppContext {
   // ---- photos ---------------------------------------------------------------
 
   api.get('/photos', (req, res) => {
-    const { child, from, to, tag, milestone, folder, kind } = req.query;
+    const { child, from, to, tag, milestone, folder, kind, q, favorite } = req.query;
     const page = Math.max(1, Number(req.query.page ?? 1));
     const pageSize = Math.min(500, Math.max(1, Number(req.query.pageSize ?? 100)));
 
@@ -268,6 +268,15 @@ export function createApp(config: AppConfig): AppContext {
     }
     if (kind === 'video') where.push("p.mimeType LIKE 'video/%'");
     else if (kind === 'photo') where.push("p.mimeType NOT LIKE 'video/%'");
+    if (favorite === '1') where.push('p.favorite = 1');
+    if (q && String(q).trim()) {
+      // free-text search across caption, milestone and tags
+      where.push(
+        `(p.caption LIKE @q ESCAPE '\\' OR p.milestone LIKE @q ESCAPE '\\'
+          OR EXISTS (SELECT 1 FROM json_each(p.tags) WHERE json_each.value LIKE @q ESCAPE '\\'))`,
+      );
+      params.q = '%' + String(q).trim().replace(/[\\%_]/g, '\\$&') + '%';
+    }
     if (from) {
       where.push('p.takenAt >= @from');
       params.from = String(from);
@@ -319,6 +328,14 @@ export function createApp(config: AppConfig): AppContext {
     }
     if (req.query.kind === 'video') where.push("p.mimeType LIKE 'video/%'");
     else if (req.query.kind === 'photo') where.push("p.mimeType NOT LIKE 'video/%'");
+    if (req.query.favorite === '1') where.push('p.favorite = 1');
+    if (req.query.q && String(req.query.q).trim()) {
+      where.push(
+        `(p.caption LIKE @q ESCAPE '\\' OR p.milestone LIKE @q ESCAPE '\\'
+          OR EXISTS (SELECT 1 FROM json_each(p.tags) WHERE json_each.value LIKE @q ESCAPE '\\'))`,
+      );
+      params.q = '%' + String(req.query.q).trim().replace(/[\\%_]/g, '\\$&') + '%';
+    }
     const rows = db
       .prepare(
         `SELECT substr(p.takenAt, 1, 7) AS ym, COUNT(*) AS count
@@ -352,7 +369,7 @@ export function createApp(config: AppConfig): AppContext {
   // and the multi-select "fix dates" flow), reassign children, or trash.
   // A date edit is metadata only; files are never renamed or moved.
   api.post('/photos/bulk', (req, res) => {
-    const { ids, takenAt, childIds, trash } = req.body ?? {};
+    const { ids, takenAt, childIds, trash, favorite } = req.body ?? {};
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids must be a non-empty array' });
     const photos = ids.map((id: unknown) => getPhoto(db, String(id))).filter((p): p is Photo => p !== null);
     if (photos.length === 0) return res.status(404).json({ error: 'no matching photos' });
@@ -381,6 +398,7 @@ export function createApp(config: AppConfig): AppContext {
       for (const p of photos) {
         if (newIso) db.prepare("UPDATE photos SET takenAt = ?, takenAtSource = 'manual' WHERE id = ?").run(newIso, p.id);
         if (ids2) setPhotoChildren(db, p.id, ids2);
+        if (favorite !== undefined) db.prepare('UPDATE photos SET favorite = ? WHERE id = ?').run(favorite ? 1 : 0, p.id);
       }
     });
     run();
@@ -391,7 +409,7 @@ export function createApp(config: AppConfig): AppContext {
   api.patch('/photos/:id', (req, res) => {
     const photo = getPhoto(db, req.params.id);
     if (!photo) return res.status(404).json({ error: 'photo not found' });
-    const { caption, tags, milestone, takenAt, childIds } = req.body ?? {};
+    const { caption, tags, milestone, takenAt, childIds, favorite } = req.body ?? {};
     if (childIds !== undefined) {
       const ids = validChildIds(childIds);
       if (!ids) return res.status(400).json({ error: 'childIds must be a non-empty array of existing child ids' });
@@ -404,13 +422,14 @@ export function createApp(config: AppConfig): AppContext {
     // A manual date edit updates metadata only; the original file is never
     // renamed or moved after ingest.
     db.prepare(
-      `UPDATE photos SET caption = ?, tags = ?, milestone = ?, takenAt = ?, takenAtSource = ? WHERE id = ?`,
+      `UPDATE photos SET caption = ?, tags = ?, milestone = ?, takenAt = ?, takenAtSource = ?, favorite = ? WHERE id = ?`,
     ).run(
       caption !== undefined ? String(caption) : photo.caption,
       tags !== undefined ? JSON.stringify(Array.isArray(tags) ? tags.map(String) : []) : JSON.stringify(photo.tags),
       milestone !== undefined ? (milestone ? String(milestone) : null) : photo.milestone,
       newTakenAt ? newTakenAt.toISOString() : photo.takenAt,
       newTakenAt ? 'manual' : photo.takenAtSource,
+      favorite !== undefined ? (favorite ? 1 : 0) : photo.favorite ? 1 : 0,
       photo.id,
     );
     snapshots.schedule();

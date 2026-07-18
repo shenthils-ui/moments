@@ -2,6 +2,18 @@
 
 All notable changes to Moments are recorded here. Dates are ISO (YYYY-MM-DD).
 
+## [1.5.0] — 2026-07-16
+
+### Added — search and favorites
+
+- **Search** box on the timeline: free-text match across captions, tags and
+  milestones (LIKE metacharacters handled safely). The date rail follows the
+  search so counts and jumps reflect the results.
+- **Favorites**: a ♥ toggle in the viewer and on tiles, plus a **Favorites**
+  filter on the timeline. Bulk-favorite a selection via `POST /api/photos/bulk`.
+  New `favorite` column (schema migration v4); `favorite=1` and `q=` filters on
+  the photos and histogram APIs; `favorite` accepted on the photo PATCH.
+
 ## [1.4.0] — 2026-07-16
 
 ### Added — TimeHut-style date rail, re-dating, and bulk fixes

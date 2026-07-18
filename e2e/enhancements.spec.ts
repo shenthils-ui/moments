@@ -101,6 +101,29 @@ test('the photo/video filter narrows the timeline', async ({ page }) => {
   await expect(page.locator('[data-testid=photo-tile]')).toHaveCount(2);
 });
 
+test('favorite a photo, then filter to favorites; search by caption', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(BASE);
+  // open the first photo and favorite it, adding a caption via edit
+  await page.locator('[data-testid=photo-tile]').first().click();
+  await page.getByTestId('favorite-toggle').click();
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByTestId('caption-input').fill('sunset at the lake');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: '✕ Close' }).click();
+
+  // favorites filter shows exactly the one we starred
+  await page.getByTestId('fav-toggle').click();
+  await expect(page.locator('[data-testid=photo-tile]')).toHaveCount(1);
+  await page.getByTestId('fav-toggle').click(); // off again
+
+  // search matches the caption
+  await page.getByTestId('search-input').fill('sunset');
+  await expect(page.locator('[data-testid=photo-tile]')).toHaveCount(1);
+  await page.getByTestId('search-input').fill('nomatchxyz');
+  await expect(page.locator('[data-testid=photo-tile]')).toHaveCount(0);
+});
+
 test('the Settings nav item opens Settings, which links to the other tools', async ({ page }) => {
   await page.goto(BASE);
   await page.getByRole('link', { name: 'Settings' }).first().click();

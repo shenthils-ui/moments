@@ -82,6 +82,7 @@ export async function ingestFile(db: DB, photosRoot: string, opts: IngestOptions
     caption: opts.caption ?? '',
     tags: opts.tags ?? [],
     milestone: null,
+    favorite: false,
     status: 'active',
     trashedAt: null,
     createdAt: new Date().toISOString(),

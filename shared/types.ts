@@ -27,6 +27,7 @@ export interface Photo {
   caption: string;
   tags: string[];
   milestone: string | null;
+  favorite: boolean;
   status: PhotoStatus;
   trashedAt: string | null;
   createdAt: string;

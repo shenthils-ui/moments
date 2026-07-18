@@ -86,7 +86,11 @@ date/filename. Nothing is duplicated and no files are renamed.
   days with counts (like TimeHut's age rail). Click any entry to jump; the
   month you're viewing is highlighted; "Today ↑" returns to newest. On phones,
   tap the floating **📅 Dates** button.
+- **Search:** the search box matches captions, tags and milestones as you
+  type; the rail narrows to the results.
 - **Photos / Videos filter:** toggle All / Photos / Videos to narrow the view.
+- **Favorites:** tap ♥ in the viewer (or see it on a tile), and use the
+  **Favorites** filter to show only starred items.
 - Videos show a ▶ badge and their duration on the tile.
 
 ### Fixing dates the easy way

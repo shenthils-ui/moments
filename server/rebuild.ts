@@ -89,6 +89,7 @@ export async function rebuildIndex(db: DB, photosRoot: string): Promise<RebuildR
         caption: '',
         tags: [],
         milestone: null,
+        favorite: false,
         status: 'active',
         trashedAt: null,
         createdAt: new Date().toISOString(),

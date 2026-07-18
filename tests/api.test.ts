@@ -270,6 +270,53 @@ describe('photo metadata', () => {
   });
 });
 
+describe('favorites and search', () => {
+  async function up(name: string, exif: string) {
+    const f = path.join(env.root, 'src', name);
+    await makeJpeg(f, exif);
+    return (await agent.post('/api/upload').field('childIds', JSON.stringify([childId])).attach('files', f).expect(200))
+      .body.results[0].photo.id as string;
+  }
+
+  it('toggles favorite and filters by it', async () => {
+    const a = await up('fa.jpg', '2023:01:01 10:00:00');
+    await up('fb.jpg', '2023:01:02 10:00:00');
+    const patched = await agent.patch(`/api/photos/${a}`).send({ favorite: true }).expect(200);
+    expect(patched.body.favorite).toBe(true);
+
+    const favs = await agent.get('/api/photos?favorite=1').expect(200);
+    expect(favs.body.total).toBe(1);
+    expect(favs.body.photos[0].id).toBe(a);
+    // histogram honours the favorite filter too
+    const hist = await agent.get('/api/photos/histogram?favorite=1').expect(200);
+    expect(hist.body.total).toBe(1);
+
+    await agent.patch(`/api/photos/${a}`).send({ favorite: false }).expect(200);
+    expect((await agent.get('/api/photos?favorite=1').expect(200)).body.total).toBe(0);
+  });
+
+  it('searches captions, tags and milestones', async () => {
+    const a = await up('sa.jpg', '2023:02:01 10:00:00');
+    const b = await up('sb.jpg', '2023:02:02 10:00:00');
+    await agent.patch(`/api/photos/${a}`).send({ caption: 'Beach holiday in Spain', tags: ['sunny'] });
+    await agent.patch(`/api/photos/${b}`).send({ milestone: 'first swim' });
+
+    expect((await agent.get('/api/photos?q=beach').expect(200)).body.total).toBe(1);
+    expect((await agent.get('/api/photos?q=sunny').expect(200)).body.total).toBe(1);
+    expect((await agent.get('/api/photos?q=swim').expect(200)).body.total).toBe(1);
+    expect((await agent.get('/api/photos?q=zzz').expect(200)).body.total).toBe(0);
+    // LIKE metacharacters in the query are treated literally
+    expect((await agent.get('/api/photos?q=%25').expect(200)).body.total).toBe(0);
+  });
+
+  it('bulk-favorites a selection', async () => {
+    const a = await up('bfa.jpg', '2023:03:01 10:00:00');
+    const b = await up('bfb.jpg', '2023:03:02 10:00:00');
+    await agent.post('/api/photos/bulk').send({ ids: [a, b], favorite: true }).expect(200);
+    expect((await agent.get('/api/photos?favorite=1').expect(200)).body.total).toBe(2);
+  });
+});
+
 describe('trash', () => {
   it('moves deleted originals to _trash and restores them', async () => {
     const file = path.join(env.root, 'src', 'trashme.jpg');
